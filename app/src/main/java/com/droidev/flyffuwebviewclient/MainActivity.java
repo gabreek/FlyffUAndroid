@@ -101,18 +101,20 @@ public class MainActivity extends AppCompatActivity {
 
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN:
-                    _xDelta = X - view.getLeft();
-                    _yDelta = Y - view.getTop();
+                    _xDelta = (int) (X - view.getX());
+                    _yDelta = (int) (Y - view.getY());
                     // Restore full opacity if it was hidden
-                    ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
-                    animatorAlpha.setDuration(100);
-                    animatorAlpha.start();
-                    view.setTag(null); // Remove snapped tag
+                    if (view.getTag() != null && view.getTag().equals("snapped")) {
+                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
+                        animatorAlpha.setDuration(100);
+                        animatorAlpha.start();
+                        view.setTag(null); // Remove snapped tag
+                    }
                     break;
                 case MotionEvent.ACTION_UP:
                     int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
-                    float deltaX = Math.abs(X - (_xDelta + view.getLeft()));
-                    float deltaY = Math.abs(Y - (_yDelta + view.getTop()));
+                    float deltaX = Math.abs(X - (view.getX() + _xDelta));
+                    float deltaY = Math.abs(Y - (view.getY() + _yDelta));
 
                     if (deltaX < touchSlop && deltaY < touchSlop) {
                         // It's a click, let the OnClickListener handle it
@@ -155,15 +157,11 @@ public class MainActivity extends AppCompatActivity {
                 case MotionEvent.ACTION_POINTER_UP:
                     break;
                 case MotionEvent.ACTION_MOVE:
-                    RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
-                    layoutParams.leftMargin = X - _xDelta;
-                    layoutParams.topMargin = Y - _yDelta;
-                    layoutParams.rightMargin = -250;
-                    layoutParams.bottomMargin = -250;
-                    view.setLayoutParams(layoutParams);
-                    break;
+                    view.setX(X - _xDelta);
+                    view.setY(Y - _yDelta);
+                    return true; // Consume the event during drag
             }
-            return true; // Consume the event during drag
+            return false; // Default to false, let other listeners handle it
         });
 
         floatingActionButton.setOnClickListener(view -> {
