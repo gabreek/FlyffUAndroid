@@ -46,6 +46,14 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int WIKI_CLIENT_ID = -1;
+    private static final int MADRIGAL_CLIENT_ID = -2;
+    private static final int FLYFFULATOR_CLIENT_ID = -3;
+
+    private static final String WIKI_URL = "https://flyff-wiki.gpotato.com.br/wiki/Main_Page";
+    private static final String MADRIGAL_URL = "https://madrigalinside.com/";
+    private static final String FLYFFULATOR_URL = "https://flyffulator.com/";
+
     private static final int MAX_CLIENTS = 10; // Let's allow up to 10 slots
     private static final String CLIENT_NAME_KEY = "client_custom_name";
 
@@ -224,6 +232,12 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        // Add Utils Menu
+        SubMenu utilsMenu = popup.getMenu().addSubMenu(Menu.NONE, 3, Menu.NONE, "Utils");
+        utilsMenu.add(Menu.NONE, 6000 + WIKI_CLIENT_ID, Menu.NONE, "Flyff Wiki");
+        utilsMenu.add(Menu.NONE, 6000 + MADRIGAL_CLIENT_ID, Menu.NONE, "Madrigal Inside");
+        utilsMenu.add(Menu.NONE, 6000 + FLYFFULATOR_CLIENT_ID, Menu.NONE, "Flyffulator");
+
         popup.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
             int clientId = -1;
@@ -234,6 +248,7 @@ public class MainActivity extends AppCompatActivity {
                 else if (itemId < 4000) clientId = itemId - 3000; // Open
                 else if (itemId < 5000) clientId = itemId - 4000; // Rename
                 else if (itemId < 6000) clientId = itemId - 5000; // Delete
+                else if (itemId < 7000) clientId = itemId - 6000; // Utils
             }
 
             if (itemId == 1) { // New Client
@@ -254,6 +269,9 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 } else if (itemId >= 5000 && itemId < 6000) { // Delete
                     confirmDeleteClient(clientId);
+                    return true;
+                } else if (itemId >= 6000 && itemId < 7000) { // Utils
+                    openUtilityClient(clientId);
                     return true;
                 }
             }
@@ -313,10 +331,62 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String getClientDisplayName(int clientId) {
+        if (clientId == WIKI_CLIENT_ID) return "Flyff Wiki";
+        if (clientId == MADRIGAL_CLIENT_ID) return "Madrigal Inside";
+        if (clientId == FLYFFULATOR_CLIENT_ID) return "Flyffulator";
+
         TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
         String customName = db.getString(CLIENT_NAME_KEY);
         String displayName = customName != null && !customName.isEmpty() ? customName : "Client " + clientId;
         return displayName;
+    }
+
+    private void openUtilityClient(int clientId) {
+        String targetUrl;
+        switch (clientId) {
+            case WIKI_CLIENT_ID:
+                targetUrl = WIKI_URL;
+                break;
+            case MADRIGAL_CLIENT_ID:
+                targetUrl = MADRIGAL_URL;
+                break;
+            case FLYFFULATOR_CLIENT_ID:
+                targetUrl = FLYFFULATOR_URL;
+                break;
+            default:
+                Toast.makeText(this, "Unknown utility client.", Toast.LENGTH_SHORT).show();
+                return;
+        }
+
+        if (webViews.get(clientId) != null) { // Already open
+            if (activeClientId == clientId) {
+                // If it's already the active client, ask to close it
+                confirmCloseUtilityClient(clientId);
+            } else {
+                switchToClient(clientId);
+            }
+            return;
+        }
+
+        if (webViews.size() >= MAX_CLIENTS) {
+            Toast.makeText(this, "Max open clients reached. Cannot open more.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        FrameLayout frameLayout = new FrameLayout(this);
+        frameLayout.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        linearLayout.addView(frameLayout);
+        layouts.put(clientId, frameLayout);
+
+        WebView webView = new WebView(getApplicationContext());
+        createWebViewer(webView, frameLayout, clientId, targetUrl);
+        webViews.put(clientId, webView);
+
+        switchToClient(clientId);
+        floatingActionButton.setVisibility(View.VISIBLE);
+        Toast.makeText(this, getClientDisplayName(clientId) + " opened.", Toast.LENGTH_SHORT).show();
     }
 
     private void createNewClient() {
@@ -383,7 +453,7 @@ public class MainActivity extends AppCompatActivity {
         layouts.put(clientId, frameLayout);
 
         WebView webView = new WebView(getApplicationContext());
-        createWebViewer(webView, frameLayout, clientId);
+        createWebViewer(webView, frameLayout, clientId, url);
         webViews.put(clientId, webView);
 
         switchToClient(clientId);
@@ -471,7 +541,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
-    private void createWebViewer(WebView webView, FrameLayout frameLayout, int clientId) {
+    private void createWebViewer(WebView webView, FrameLayout frameLayout, int clientId, String initialUrl) {
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
@@ -506,7 +576,46 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setDisplayZoomControls(false);
 
         frameLayout.addView(webView);
-        webView.loadUrl(url);
+        webView.loadUrl(initialUrl);
+    }
+
+    private void createWebViewer(WebView webView, FrameLayout frameLayout, int clientId) {
+        createWebViewer(webView, frameLayout, clientId, url);
+    }
+
+    private void confirmCloseUtilityClient(int clientId) {
+        new AlertDialog.Builder(MainActivity.this)
+                .setCancelable(false)
+                .setTitle("Close Utility?")
+                .setMessage("Do you want to close " + getClientDisplayName(clientId) + "?")
+                .setPositiveButton("Yes", (dialog, which) -> closeUtilityClient(clientId))
+                .setNegativeButton("No", null)
+                .show();
+    }
+
+    private void closeUtilityClient(int clientId) {
+        if (webViews.get(clientId) == null) return;
+
+        WebView webViewToClose = webViews.get(clientId);
+        FrameLayout layoutToClose = layouts.get(clientId);
+
+        layoutToClose.removeAllViews();
+        webViewToClose.destroy();
+        linearLayout.removeView(layoutToClose);
+
+        webViews.remove(clientId);
+        layouts.remove(clientId);
+
+        Toast.makeText(this, getClientDisplayName(clientId) + " closed.", Toast.LENGTH_SHORT).show();
+
+        if (webViews.size() == 0) {
+            activeClientId = -1;
+            setTitle("FlyffU Android");
+            floatingActionButton.setVisibility(View.GONE);
+        } else {
+            activeClientId = webViews.keyAt(0);
+            switchToClient(activeClientId);
+        }
     }
 
     private void snapFabToEdge(View view) {
