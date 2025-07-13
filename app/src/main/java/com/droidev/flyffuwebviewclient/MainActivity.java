@@ -55,7 +55,8 @@ public class MainActivity extends AppCompatActivity {
     private int _yDelta;
     private int screenWidth;
     private int screenHeight;
-    private boolean isDragging = false;
+    private float initialTouchX;
+    private float initialTouchY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,7 +102,9 @@ public class MainActivity extends AppCompatActivity {
 
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN:
-                    isDragging = false;
+                    initialTouchX = event.getRawX();
+                    initialTouchY = event.getRawY();
+
                     if (view.getTag() != null && view.getTag().equals("snapped")) {
                         ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
                         animatorAlpha.setDuration(100);
@@ -113,6 +116,14 @@ public class MainActivity extends AppCompatActivity {
                     _yDelta = Y - lParams.topMargin;
                     break;
                 case MotionEvent.ACTION_UP:
+                    float deltaX = event.getRawX() - initialTouchX;
+                    float deltaY = event.getRawY() - initialTouchY;
+
+                    // Consider it a click if movement is small
+                    if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+                        view.performClick();
+                    }
+
                     int fabWidth = view.getWidth();
                     int fabHeight = view.getHeight();
 
@@ -151,9 +162,6 @@ public class MainActivity extends AppCompatActivity {
                 case MotionEvent.ACTION_POINTER_UP:
                     break;
                 case MotionEvent.ACTION_MOVE:
-                    if (Math.abs(X - (view.getX() + _xDelta)) > 5 || Math.abs(Y - (view.getY() + _yDelta)) > 5) { // Check for significant movement
-                        isDragging = true;
-                    }
                     RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
                     layoutParams.leftMargin = X - _xDelta;
                     layoutParams.topMargin = Y - _yDelta;
@@ -162,7 +170,7 @@ public class MainActivity extends AppCompatActivity {
                     view.setLayoutParams(layoutParams);
                     break;
             }
-            return isDragging; // Return true if dragging to consume event, false otherwise
+            return true; // Always return true to consume the event
         });
 
         floatingActionButton.setOnClickListener(view -> {
