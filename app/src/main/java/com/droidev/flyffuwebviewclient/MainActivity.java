@@ -108,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
                     _xDelta = (int) (X - view.getX());
                     _yDelta = (int) (Y - view.getY());
                     isBeingDragged = false;
-                    return false; // Let system handle click/long click
+                    return true; // Consume ACTION_DOWN to prevent system long click detection
                 case MotionEvent.ACTION_UP:
                     if (isBeingDragged) {
                         int fabWidth = view.getWidth();
@@ -130,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         return true; // Consume the event if it was a drag
                     }
-                    return false; // Let system handle click/long click
+                    return false; // Let system handle click/long click if not dragged
                 case MotionEvent.ACTION_MOVE:
                     isBeingDragged = true;
                     view.setX(X - _xDelta);
