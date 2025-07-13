@@ -16,6 +16,7 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import android.view.WindowManager;
+import android.widget.PopupMenu;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Button;
@@ -77,23 +78,81 @@ public class MainActivity extends AppCompatActivity {
         floatingActionButton = findViewById(R.id.fab);
 
         floatingActionButton.setOnClickListener(view -> {
-
             if (sClient.getVisibility() == View.VISIBLE) {
-
                 sClient.setVisibility(View.GONE);
-
                 mClient.setVisibility(View.VISIBLE);
-
                 setTitle("FlyffU Android - Main Client");
-
             } else if (sClient.getVisibility() == View.GONE) {
-
                 sClient.setVisibility(View.VISIBLE);
-
                 mClient.setVisibility(View.GONE);
-
                 setTitle("FlyffU Android - Second Client");
             }
+        });
+
+        floatingActionButton.setOnLongClickListener(view -> {
+            PopupMenu popup = new PopupMenu(MainActivity.this, view);
+            popup.getMenuInflater().inflate(R.menu.main_activity_menu, popup.getMenu());
+
+            // Add "Show Both Side by Side" option
+            popup.getMenu().add(Menu.NONE, R.id.showBothClients, Menu.NONE, "Show Both Side by Side");
+
+            popup.setOnMenuItemClickListener(item -> {
+                switch (item.getItemId()) {
+                    case R.id.secondClient:
+                        if (sClient.getVisibility() == View.GONE && !isOpen) {
+                            sClient.setVisibility(View.VISIBLE);
+                            secondClient();
+                            item.setTitle("Close Second Client");
+                            optionMenu.findItem(R.id.reloadSecondClient).setEnabled(true);
+                            floatingActionButton.setVisibility(View.VISIBLE);
+                            isOpen = true;
+                        } else {
+                            AlertDialog dialog = new AlertDialog.Builder(MainActivity.this)
+                                    .setCancelable(false)
+                                    .setTitle("Are you sure you want to close the second client?")
+                                    .setPositiveButton("Yes", null)
+                                    .setNegativeButton("No", null)
+                                    .show();
+                            Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                            positiveButton.setOnClickListener(v -> {
+                                sClient.removeAllViews();
+                                sClientWebView.loadUrl("about:blank");
+                                sClient.setVisibility(View.GONE);
+                                item.setTitle("Open Second Client");
+                                optionMenu.findItem(R.id.reloadSecondClient).setEnabled(false);
+                                if (mClient.getVisibility() == View.GONE) {
+                                    mClient.setVisibility(View.VISIBLE);
+                                }
+                                floatingActionButton.setVisibility(View.GONE);
+                                isOpen = false;
+                                setTitle("FlyffU Android - Main Client");
+                                Toast.makeText(MainActivity.this, "Second Client closed.", Toast.LENGTH_SHORT).show();
+                                dialog.dismiss();
+                            });
+                        }
+                        return true;
+                    case R.id.reloadMainClient:
+                        mClientWebView.loadUrl(url);
+                        return true;
+                    case R.id.reloadSecondClient:
+                        sClientWebView.loadUrl(url);
+                        return true;
+                    case R.id.showBothClients:
+                        sClient.setVisibility(View.VISIBLE);
+                        mClient.setVisibility(View.VISIBLE);
+                        setTitle("FlyffU Android - Both Clients");
+                        if (!isOpen) {
+                            secondClient();
+                            isOpen = true;
+                            optionMenu.findItem(R.id.secondClient).setTitle("Close Second Client");
+                            optionMenu.findItem(R.id.reloadSecondClient).setEnabled(true);
+                        }
+                        return true;
+                }
+                return false;
+            });
+            popup.show();
+            return true;
         });
 
         mainClient();
@@ -112,7 +171,6 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Press Back again to Exit.",
                     Toast.LENGTH_SHORT).show();
             exit = true;
-            fullScreenOff();
             new Handler().postDelayed(() -> exit = false, 3 * 1000);
         }
     }
@@ -126,86 +184,8 @@ public class MainActivity extends AppCompatActivity {
         sClientWebView.destroy();
     }
 
-    @SuppressLint("NonConstantResourceId")
     public boolean onOptionsItemSelected(MenuItem item) {
-
-        switch (item.getItemId()) {
-
-            case R.id.secondClient:
-
-                if (sClient.getVisibility() == View.GONE && !isOpen) {
-
-                    sClient.setVisibility(View.VISIBLE);
-
-                    secondClient();
-
-                    optionMenu.findItem(R.id.secondClient).setTitle("Close Second Client");
-
-                    optionMenu.findItem(R.id.reloadSecondClient).setEnabled(true);
-
-                    floatingActionButton.setVisibility(View.VISIBLE);
-
-                    isOpen = true;
-                } else {
-
-                    AlertDialog dialog = new AlertDialog.Builder(this)
-                            .setCancelable(false)
-                            .setTitle("Are you sure you want to close the second client?")
-                            .setPositiveButton("Yes", null)
-                            .setNegativeButton("No", null)
-                            .show();
-
-                    Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-
-                    positiveButton.setOnClickListener(v -> {
-
-                        sClient.removeAllViews();
-
-                        sClientWebView.loadUrl("about:blank");
-
-                        sClient.setVisibility(View.GONE);
-
-                        optionMenu.findItem(R.id.secondClient).setTitle("Open Second Client");
-
-                        optionMenu.findItem(R.id.reloadSecondClient).setEnabled(false);
-
-                        if (mClient.getVisibility() == View.GONE) {
-
-                            mClient.setVisibility(View.VISIBLE);
-                        }
-
-                        floatingActionButton.setVisibility(View.GONE);
-
-                        isOpen = false;
-
-                        setTitle("FlyffU Android - Main Client");
-
-                        Toast.makeText(this, "Second Client closed.", Toast.LENGTH_SHORT).show();
-
-                        dialog.dismiss();
-                    });
-                }
-
-                break;
-
-            case R.id.reloadMainClient:
-
-                mClientWebView.loadUrl(url);
-
-                break;
-
-            case R.id.reloadSecondClient:
-
-                sClientWebView.loadUrl(url);
-
-                break;
-
-            case R.id.fullScreen:
-
-                fullScreenOn();
-
-                break;
-        }
+        // Options are now handled by the FAB's long click PopupMenu
         return super.onOptionsItemSelected(item);
     }
 

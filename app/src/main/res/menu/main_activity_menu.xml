@@ -29,8 +29,10 @@
 
     </item>
 
+    
     <item
-        android:id="@+id/fullScreen"
-        android:title="Go Back to Fullscreen"
-        tools:ignore="HardcodedText" />
+        android:id="@+id/showBothClients"
+        android:title="Show Both Side by Side"
+        android:visible="false" />
+
 </menu>
