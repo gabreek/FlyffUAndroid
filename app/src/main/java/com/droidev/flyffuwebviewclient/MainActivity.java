@@ -220,6 +220,7 @@ public class MainActivity extends AppCompatActivity {
                     clientSubMenu.add(Menu.NONE, 3000 + clientId, 1, "Open");
                 }
                 clientSubMenu.add(Menu.NONE, 4000 + clientId, 3, "Rename");
+                clientSubMenu.add(Menu.NONE, 5000 + clientId, 4, "Delete"); // New Delete option
             }
         }
 
@@ -232,6 +233,7 @@ public class MainActivity extends AppCompatActivity {
                 else if (itemId < 3000) clientId = itemId - 2000; // Kill
                 else if (itemId < 4000) clientId = itemId - 3000; // Open
                 else if (itemId < 5000) clientId = itemId - 4000; // Rename
+                else if (itemId < 6000) clientId = itemId - 5000; // Delete
             }
 
             if (itemId == 1) { // New Client
@@ -249,6 +251,9 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 } else if (itemId >= 4000 && itemId < 5000) { // Rename
                     showRenameDialog(clientId);
+                    return true;
+                } else if (itemId >= 5000 && itemId < 6000) { // Delete
+                    confirmDeleteClient(clientId);
                     return true;
                 }
             }
@@ -441,11 +446,6 @@ public class MainActivity extends AppCompatActivity {
     private void killClient(int clientId) {
         if (webViews.get(clientId) == null) return;
 
-        if (webViews.size() == 1) { // If this is the last client
-            Toast.makeText(this, "Cannot kill the last active client.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
         WebView webViewToKill = webViews.get(clientId);
         FrameLayout layoutToKill = layouts.get(clientId);
 
@@ -458,7 +458,7 @@ public class MainActivity extends AppCompatActivity {
 
         Toast.makeText(this, getClientDisplayName(clientId) + " killed.", Toast.LENGTH_SHORT).show();
 
-        if (webViews.size() == 0) { // This case should now be prevented by the check above
+        if (webViews.size() == 0) {
             activeClientId = -1;
             setTitle("FlyffU Android");
             floatingActionButton.setVisibility(View.GONE);
@@ -529,6 +529,41 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Press Back again to Exit.", Toast.LENGTH_SHORT).show();
             exit = true;
             new Handler().postDelayed(() -> exit = false, 3 * 1000);
+        }
+    }
+
+    private void confirmDeleteClient(int clientId) {
+        new AlertDialog.Builder(MainActivity.this)
+                .setCancelable(false)
+                .setTitle("Confirm Deletion")
+                .setMessage("Are you sure you want to delete " + getClientDisplayName(clientId) + "? This will remove all its data.")
+                .setPositiveButton("Yes", (dialog, which) -> deleteClient(clientId))
+                .setNegativeButton("No", null)
+                .show();
+    }
+
+    private void deleteClient(int clientId) {
+        // Kill the client if it's open
+        if (webViews.get(clientId) != null) {
+            killClient(clientId);
+        }
+
+        // Remove from configuredClientIds
+        configuredClientIds.remove(clientId);
+
+        // Delete the TinyDB file
+        TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
+        db.clear(); // Clear all preferences
+        File prefsFile = new File(getApplicationInfo().dataDir, "shared_prefs/client_prefs_" + clientId + ".xml");
+        if (prefsFile.exists()) {
+            prefsFile.delete();
+        }
+
+        Toast.makeText(this, "Client " + clientId + " and its data deleted.", Toast.LENGTH_SHORT).show();
+
+        // If no clients are left, create a new one
+        if (configuredClientIds.isEmpty()) {
+            createNewClient();
         }
     }
 
