@@ -56,9 +56,6 @@ public class MainActivity extends AppCompatActivity {
     private int _yDelta;
     private int screenWidth;
     private int screenHeight;
-    private long downTime;
-    private float initialRawX;
-    private float initialRawY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,45 +101,25 @@ public class MainActivity extends AppCompatActivity {
 
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN:
-                    downTime = event.getDownTime();
-                    initialRawX = event.getRawX();
-                    initialRawY = event.getRawY();
-
-                    if (view.getTag() != null && view.getTag().equals("snapped")) {
-                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
-                        animatorAlpha.setDuration(100);
-                        animatorAlpha.start();
-                        view.setTag(null); // Remove snapped tag
-                    }
-                    RelativeLayout.LayoutParams lParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
-                    _xDelta = X - lParams.leftMargin;
-                    _yDelta = Y - lParams.topMargin;
+                    _xDelta = X - view.getLeft();
+                    _yDelta = Y - view.getTop();
+                    // Restore full opacity if it was hidden
+                    ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
+                    animatorAlpha.setDuration(100);
+                    animatorAlpha.start();
+                    view.setTag(null); // Remove snapped tag
                     break;
                 case MotionEvent.ACTION_UP:
-                    long eventDuration = event.getEventTime() - downTime;
-                    float deltaX = event.getRawX() - initialRawX;
-                    float deltaY = event.getRawY() - initialRawY;
-
-                    // Define a threshold for what constitutes a "click" vs. a "drag"
                     int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
-                    int dragThreshold = touchSlop * 2; // A larger threshold for dragging
+                    float deltaX = Math.abs(X - (_xDelta + view.getLeft()));
+                    float deltaY = Math.abs(Y - (_yDelta + view.getTop()));
 
-                    if (Math.abs(deltaX) < touchSlop && Math.abs(deltaY) < touchSlop) {
-                        // It's a click or long click, not a drag
-                        if (eventDuration > ViewConfiguration.getLongPressTimeout()) {
-                            view.performLongClick();
-                        } else {
-                            view.performClick();
-                        }
-                        // Restore full opacity if it was hidden
-                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
-                        animatorAlpha.setDuration(100);
-                        animatorAlpha.start();
-                        view.setTag(null); // Remove snapped tag
-                    } else if (Math.abs(deltaX) > dragThreshold || Math.abs(deltaY) > dragThreshold) {
-                        // It's a significant drag, so snap to edge
+                    if (deltaX < touchSlop && deltaY < touchSlop) {
+                        // It's a click, let the OnClickListener handle it
+                        return false;
+                    } else {
+                        // It's a drag, snap to edge
                         int fabWidth = view.getWidth();
-                        // Determine which side to snap to
                         int middleX = screenWidth / 2;
                         float currentX = view.getX();
 
@@ -171,14 +148,8 @@ public class MainActivity extends AppCompatActivity {
 
                         // Set a tag to indicate it's snapped
                         view.setTag("snapped");
-                    } else {
-                        // Small drag, not a click, not a snap. Just restore full opacity.
-                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
-                        animatorAlpha.setDuration(100);
-                        animatorAlpha.start();
-                        view.setTag(null); // Remove snapped tag
+                        return true; // Consume the event
                     }
-                    break;
                 case MotionEvent.ACTION_POINTER_DOWN:
                     break;
                 case MotionEvent.ACTION_POINTER_UP:
@@ -192,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
                     view.setLayoutParams(layoutParams);
                     break;
             }
-            return true; // Always return true to consume the event
+            return true; // Consume the event during drag
         });
 
         floatingActionButton.setOnClickListener(view -> {
