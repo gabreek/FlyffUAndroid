@@ -17,6 +17,9 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import android.view.WindowManager;
 import android.widget.PopupMenu;
+import android.util.DisplayMetrics;
+import android.animation.ObjectAnimator;
+import android.widget.RelativeLayout;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Button;
@@ -47,6 +50,11 @@ public class MainActivity extends AppCompatActivity {
     Menu optionMenu;
 
     String url = "https://universe.flyff.com/play";
+
+    private int _xDelta;
+    private int _yDelta;
+    private int screenWidth;
+    private int screenHeight;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,6 +87,78 @@ public class MainActivity extends AppCompatActivity {
         sClientWebView = new WebView(getApplicationContext());
 
         floatingActionButton = findViewById(R.id.fab);
+
+        // Get screen dimensions
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+        screenWidth = displayMetrics.widthPixels;
+        screenHeight = displayMetrics.heightPixels;
+
+        floatingActionButton.setOnTouchListener((view, event) -> {
+            final int X = (int) event.getRawX();
+            final int Y = (int) event.getRawY();
+
+            switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                case MotionEvent.ACTION_DOWN:
+                    if (view.getTag() != null && view.getTag().equals("snapped")) {
+                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
+                        animatorAlpha.setDuration(100);
+                        animatorAlpha.start();
+                        view.setTag(null); // Remove snapped tag
+                    }
+                    RelativeLayout.LayoutParams lParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
+                    _xDelta = X - lParams.leftMargin;
+                    _yDelta = Y - lParams.topMargin;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    int fabWidth = view.getWidth();
+                    int fabHeight = view.getHeight();
+
+                    // Determine which side to snap to
+                    int middleX = screenWidth / 2;
+                    float currentX = view.getX();
+
+                    float targetX;
+                    float targetAlpha;
+
+                    if (currentX + (fabWidth / 2) < middleX) {
+                        // Snap to left
+                        targetX = -fabWidth / 2; // Half hidden
+                        targetAlpha = 0.5f; // Partially transparent
+                    } else {
+                        // Snap to right
+                        targetX = screenWidth - (fabWidth / 2); // Half hidden
+                        targetAlpha = 0.5f; // Partially transparent
+                    }
+
+                    // Animate the FAB to the target position and alpha
+                    ObjectAnimator animatorX = ObjectAnimator.ofFloat(view, "x", targetX);
+                    ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", targetAlpha);
+
+                    animatorX.setDuration(200);
+                    animatorAlpha.setDuration(200);
+
+                    animatorX.start();
+                    animatorAlpha.start();
+
+                    // Set a tag to indicate it's snapped
+                    view.setTag("snapped");
+                    break;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    break;
+                case MotionEvent.ACTION_POINTER_UP:
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
+                    layoutParams.leftMargin = X - _xDelta;
+                    layoutParams.topMargin = Y - _yDelta;
+                    layoutParams.rightMargin = -250;
+                    layoutParams.bottomMargin = -250;
+                    view.setLayoutParams(layoutParams);
+                    break;
+            }
+            return false; // Return false to allow click listener to work
+        });
 
         floatingActionButton.setOnClickListener(view -> {
             if (sClient.getVisibility() == View.VISIBLE) {
