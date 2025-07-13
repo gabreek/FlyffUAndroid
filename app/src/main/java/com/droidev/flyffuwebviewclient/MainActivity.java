@@ -12,6 +12,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.util.SparseArray;
 import android.view.Menu;
@@ -23,11 +24,10 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
@@ -35,17 +35,24 @@ import android.widget.Toast;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int MAX_CLIENTS = 10; // Let's allow up to 10 slots
+    private static final String CLIENT_NAME_KEY = "client_custom_name";
 
     private SparseArray<WebView> webViews = new SparseArray<>();
     private SparseArray<FrameLayout> layouts = new SparseArray<>();
     private int activeClientId = -1;
+    private Set<Integer> configuredClientIds = new HashSet<>(); // In-memory tracking of configured clients
 
     private LinearLayout linearLayout;
     private FloatingActionButton floatingActionButton;
@@ -121,8 +128,22 @@ public class MainActivity extends AppCompatActivity {
 
         setupFabTouchListener();
 
+        // Initialize configuredClientIds from existing files on startup
+        configuredClientIds.addAll(getExistingClientIdsFromFileSystem());
+
         if (savedInstanceState == null) {
-            createNewClient(); // Start with one client
+            // If there are no configs, create a fresh client. Otherwise, open the first available one.
+            if (configuredClientIds.isEmpty()) {
+                createNewClient();
+            } else {
+                // Open the first configured client if it's not already open
+                int firstClientId = Collections.min(configuredClientIds);
+                if (webViews.get(firstClientId) == null) {
+                    openClient(firstClientId);
+                } else {
+                    switchToClient(firstClientId);
+                }
+            }
         }
     }
 
@@ -181,42 +202,146 @@ public class MainActivity extends AppCompatActivity {
         PopupMenu popup = new PopupMenu(MainActivity.this, view);
         popup.getMenu().add(Menu.NONE, 1, Menu.NONE, "New Client");
 
-        if (webViews.size() > 0) {
+        List<Integer> sortedClientIds = new ArrayList<>(configuredClientIds);
+        Collections.sort(sortedClientIds);
+
+        if (!sortedClientIds.isEmpty()) {
             SubMenu clientsMenu = popup.getMenu().addSubMenu(Menu.NONE, 2, Menu.NONE, "Clients");
-            for (int i = 0; i < webViews.size(); i++) {
-                int clientId = webViews.keyAt(i);
-                SubMenu clientSubMenu = clientsMenu.addSubMenu(Menu.NONE, Menu.NONE, i, "Client " + clientId);
-                clientSubMenu.add(Menu.NONE, 1000 + clientId, 1, "Switch to");
-                clientSubMenu.add(Menu.NONE, 2000 + clientId, 2, "Kill");
+            for (int clientId : sortedClientIds) {
+                String displayName = getClientDisplayName(clientId);
+                SubMenu clientSubMenu = clientsMenu.addSubMenu(Menu.NONE, Menu.NONE, Menu.NONE, displayName);
+
+                boolean isClientOpen = webViews.get(clientId) != null;
+
+                if (isClientOpen) {
+                    clientSubMenu.add(Menu.NONE, 1000 + clientId, 1, "Switch to");
+                    clientSubMenu.add(Menu.NONE, 2000 + clientId, 2, "Kill");
+                } else {
+                    clientSubMenu.add(Menu.NONE, 3000 + clientId, 1, "Open");
+                }
+                clientSubMenu.add(Menu.NONE, 4000 + clientId, 3, "Rename");
             }
         }
 
         popup.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
+            int clientId = -1;
+
+            if (itemId > 1000) {
+                if (itemId < 2000) clientId = itemId - 1000; // Switch
+                else if (itemId < 3000) clientId = itemId - 2000; // Kill
+                else if (itemId < 4000) clientId = itemId - 3000; // Open
+                else if (itemId < 5000) clientId = itemId - 4000; // Rename
+            }
+
             if (itemId == 1) { // New Client
                 createNewClient();
                 return true;
-            } else if (itemId >= 1000 && itemId < 2000) { // Switch to
-                switchToClient(itemId - 1000);
-                return true;
-            } else if (itemId >= 2000 && itemId < 3000) { // Kill
-                confirmKillClient(itemId - 2000);
-                return true;
+            } else if (clientId != -1) {
+                if (itemId >= 1000 && itemId < 2000) { // Switch to
+                    switchToClient(clientId);
+                    return true;
+                } else if (itemId >= 2000 && itemId < 3000) { // Kill
+                    confirmKillClient(clientId);
+                    return true;
+                } else if (itemId >= 3000 && itemId < 4000) { // Open
+                    openClient(clientId);
+                    return true;
+                } else if (itemId >= 4000 && itemId < 5000) { // Rename
+                    showRenameDialog(clientId);
+                    return true;
+                }
             }
             return false;
         });
         popup.show();
     }
 
+    private void showRenameDialog(int clientId) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Rename Client");
+
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setText(getClientDisplayName(clientId));
+        builder.setView(input);
+
+        builder.setPositiveButton("Save", (dialog, which) -> {
+            String newName = input.getText().toString().trim();
+            if (!newName.isEmpty()) {
+                TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
+                db.putString(CLIENT_NAME_KEY, newName);
+                Toast.makeText(this, "Client renamed to " + newName, Toast.LENGTH_SHORT).show();
+                if (activeClientId == clientId) {
+                    setTitle(getClientDisplayName(clientId));
+                }
+            } else {
+                Toast.makeText(this, "Name cannot be empty", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+
+    // This method now only reads from the file system, used for initial population
+    private List<Integer> getExistingClientIdsFromFileSystem() {
+        List<Integer> ids = new ArrayList<>();
+        File prefsDir = new File(getApplicationInfo().dataDir, "shared_prefs");
+        if (prefsDir.exists() && prefsDir.isDirectory()) {
+            Pattern p = Pattern.compile("client_prefs_(\\d+)\\.xml");
+            File[] files = prefsDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    Matcher m = p.matcher(file.getName());
+                    if (m.matches()) {
+                        try {
+                            int id = Integer.parseInt(m.group(1));
+                            ids.add(id);
+                        } catch (NumberFormatException e) {
+                            // Ignore if parsing fails
+                        }
+                    }
+                }
+            }
+        }
+        return ids;
+    }
+
+    private String getClientDisplayName(int clientId) {
+        TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
+        String customName = db.getString(CLIENT_NAME_KEY);
+        String displayName = customName != null && !customName.isEmpty() ? customName : "Client " + clientId;
+        return displayName;
+    }
+
     private void createNewClient() {
+        List<Integer> openIds = new ArrayList<>();
+        for (int i = 0; i < webViews.size(); i++) {
+            openIds.add(webViews.keyAt(i));
+        }
+
+        // 1. Try to open an existing but currently closed client
+        for (int clientId : configuredClientIds) {
+            if (!openIds.contains(clientId)) {
+                if (webViews.size() >= MAX_CLIENTS) {
+                    Toast.makeText(this, "Max open clients reached. Cannot open more.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                openClient(clientId);
+                Toast.makeText(this, getClientDisplayName(clientId) + " opened.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+
+        // 2. If all existing clients are open, or no clients exist, create a new one
         if (webViews.size() >= MAX_CLIENTS) {
-            Toast.makeText(this, "Max clients reached", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Max open clients reached. Cannot create new client.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         int newClientId = -1;
         for (int i = 1; i <= MAX_CLIENTS; i++) {
-            if (webViews.get(i) == null) {
+            if (!configuredClientIds.contains(i)) { // Check against all configured IDs
                 newClientId = i;
                 break;
             }
@@ -227,20 +352,37 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // Add the new client ID to our in-memory set immediately
+        configuredClientIds.add(newClientId);
+
+        openClient(newClientId);
+        Toast.makeText(this, getClientDisplayName(newClientId) + " created.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void openClient(int clientId) {
+        if (webViews.get(clientId) != null) { // Already open
+            switchToClient(clientId);
+            return;
+        }
+
+        if (webViews.size() >= MAX_CLIENTS) {
+            Toast.makeText(this, "Max open clients reached", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         FrameLayout frameLayout = new FrameLayout(this);
         frameLayout.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
         linearLayout.addView(frameLayout);
-        layouts.put(newClientId, frameLayout);
+        layouts.put(clientId, frameLayout);
 
         WebView webView = new WebView(getApplicationContext());
-        createWebViewer(webView, frameLayout, newClientId);
-        webViews.put(newClientId, webView);
+        createWebViewer(webView, frameLayout, clientId);
+        webViews.put(clientId, webView);
 
-        switchToClient(newClientId);
+        switchToClient(clientId);
         floatingActionButton.setVisibility(View.VISIBLE);
-        Toast.makeText(this, "Client " + newClientId + " created.", Toast.LENGTH_SHORT).show();
     }
 
     private void switchToNextClient() {
@@ -256,18 +398,32 @@ public class MainActivity extends AppCompatActivity {
             int nextClientId = clientIds.get(nextIndexInList);
 
             switchToClient(nextClientId);
+        } else {
+            // Only one or no clients open. No switch needed.
         }
     }
 
     private void switchToClient(int clientId) {
-        if (webViews.get(clientId) == null) return;
+        if (layouts.get(clientId) == null) {
+            // This might happen if we try to switch to a client that was just killed
+            // but the switch command was already in-flight.
+            if (webViews.size() > 0) {
+                int fallbackClientId = webViews.keyAt(0);
+                switchToClient(fallbackClientId);
+            } else {
+                activeClientId = -1;
+                setTitle("FlyffU Android");
+                floatingActionButton.setVisibility(View.GONE);
+            }
+            return;
+        }
 
         for (int i = 0; i < layouts.size(); i++) {
             int key = layouts.keyAt(i);
             layouts.get(key).setVisibility(key == clientId ? View.VISIBLE : View.GONE);
         }
         activeClientId = clientId;
-        setTitle("FlyffU Android - Client " + activeClientId);
+        setTitle(getClientDisplayName(activeClientId));
     }
 
     private void confirmKillClient(int clientId) {
@@ -276,14 +432,26 @@ public class MainActivity extends AppCompatActivity {
         new AlertDialog.Builder(MainActivity.this)
                 .setCancelable(false)
                 .setTitle("Are you sure?")
-                .setMessage("Do you want to kill Client " + clientId + "?")
+                .setMessage("Do you want to kill " + getClientDisplayName(clientId) + "?")
                 .setPositiveButton("Yes", (dialog, which) -> killClient(clientId))
                 .setNegativeButton("No", null)
                 .show();
     }
 
+    private String getClientDisplayName(int clientId) {
+        TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
+        String customName = db.getString(CLIENT_NAME_KEY);
+        String displayName = customName != null && !customName.isEmpty() ? customName : "Client " + clientId;
+        return displayName;
+    }
+
     private void killClient(int clientId) {
         if (webViews.get(clientId) == null) return;
+
+        if (webViews.size() == 1) { // If this is the last client
+            Toast.makeText(this, "Cannot kill the last active client.", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         WebView webViewToKill = webViews.get(clientId);
         FrameLayout layoutToKill = layouts.get(clientId);
@@ -295,15 +463,13 @@ public class MainActivity extends AppCompatActivity {
         webViews.remove(clientId);
         layouts.remove(clientId);
 
-        Toast.makeText(this, "Client " + clientId + " killed.", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getClientDisplayName(clientId) + " killed.", Toast.LENGTH_SHORT).show();
 
-        if (webViews.size() == 0) {
+        if (webViews.size() == 0) { // This case should now be prevented by the check above
             activeClientId = -1;
             setTitle("FlyffU Android");
             floatingActionButton.setVisibility(View.GONE);
-            // Maybe prompt to create a new one or close the app
         } else {
-            // If we killed the active client, switch to the first available one
             if (activeClientId == clientId) {
                 activeClientId = webViews.keyAt(0);
                 switchToClient(activeClientId);
@@ -341,7 +507,7 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setUseWideViewPort(true);
         webSettings.setLoadWithOverviewMode(true);
         webSettings.setUserAgentString(userAgent);
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null); // Corrected: webView.setLayerType
         webSettings.setSupportZoom(true);
         webSettings.setBuiltInZoomControls(true);
         webSettings.setDisplayZoomControls(false);
@@ -365,7 +531,8 @@ public class MainActivity extends AppCompatActivity {
     public void onBackPressed() {
         if (exit) {
             finish();
-        } else {
+        }
+        else {
             Toast.makeText(this, "Press Back again to Exit.", Toast.LENGTH_SHORT).show();
             exit = true;
             new Handler().postDelayed(() -> exit = false, 3 * 1000);
@@ -396,17 +563,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        // State saving is complex with this model.
-        // The primary state (localStorage) is already persisted by TinyDB.
-        // We can save the active client ID.
         outState.putInt("activeClientId", activeClientId);
+        // Client configurations are saved in TinyDB, so they persist automatically.
     }
 
     @Override
     protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
-        // The WebViews will be recreated, but their localStorage will be correctly
-        // loaded via the JavascriptInterface. We just need to restore which one was active.
-        activeClientId = savedInstanceState.getInt("activeClientId", 1);
+        // Don't automatically restore all webviews to avoid heavy load on startup.
+        // The user can reopen them from the menu. We just restore the active one.
+        activeClientId = savedInstanceState.getInt("activeClientId", -1);
+        if (activeClientId != -1) {
+            openClient(activeClientId);
+        }
     }
 }
