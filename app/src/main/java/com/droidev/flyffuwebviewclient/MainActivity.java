@@ -65,6 +65,9 @@ public class MainActivity extends AppCompatActivity {
         // Ensure content is drawn behind the status bar
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
+        // Ensure full screen mode is applied on start
+        fullScreenOn();
+
         linearLayout = findViewById(R.id.linearLayout);
 
         mClient = findViewById(R.id.frameLayoutMainClient);
@@ -103,7 +106,17 @@ public class MainActivity extends AppCompatActivity {
                             sClient.setVisibility(View.VISIBLE);
                             secondClient();
                             item.setTitle("Close Second Client");
-                            optionMenu.findItem(R.id.reloadSecondClient).setEnabled(true);
+                            // Update the activity's menu item as well if it exists
+                            if (optionMenu != null) {
+                                MenuItem secondClientMenuItem = optionMenu.findItem(R.id.secondClient);
+                                if (secondClientMenuItem != null) {
+                                    secondClientMenuItem.setTitle("Close Second Client");
+                                }
+                                MenuItem reloadSecondClientMenuItem = optionMenu.findItem(R.id.reloadSecondClient);
+                                if (reloadSecondClientMenuItem != null) {
+                                    reloadSecondClientMenuItem.setEnabled(true);
+                                }
+                            }
                             floatingActionButton.setVisibility(View.VISIBLE);
                             isOpen = true;
                         } else {
@@ -119,7 +132,17 @@ public class MainActivity extends AppCompatActivity {
                                 sClientWebView.loadUrl("about:blank");
                                 sClient.setVisibility(View.GONE);
                                 item.setTitle("Open Second Client");
-                                optionMenu.findItem(R.id.reloadSecondClient).setEnabled(false);
+                                // Update the activity's menu item as well if it exists
+                                if (optionMenu != null) {
+                                    MenuItem secondClientMenuItem = optionMenu.findItem(R.id.secondClient);
+                                    if (secondClientMenuItem != null) {
+                                        secondClientMenuItem.setTitle("Open Second Client");
+                                    }
+                                    MenuItem reloadSecondClientMenuItem = optionMenu.findItem(R.id.reloadSecondClient);
+                                    if (reloadSecondClientMenuItem != null) {
+                                        reloadSecondClientMenuItem.setEnabled(false);
+                                    }
+                                }
                                 if (mClient.getVisibility() == View.GONE) {
                                     mClient.setVisibility(View.VISIBLE);
                                 }
@@ -144,8 +167,17 @@ public class MainActivity extends AppCompatActivity {
                         if (!isOpen) {
                             secondClient();
                             isOpen = true;
-                            optionMenu.findItem(R.id.secondClient).setTitle("Close Second Client");
-                            optionMenu.findItem(R.id.reloadSecondClient).setEnabled(true);
+                            // Update the activity's menu item as well if it exists
+                            if (optionMenu != null) {
+                                MenuItem secondClientMenuItem = optionMenu.findItem(R.id.secondClient);
+                                if (secondClientMenuItem != null) {
+                                    secondClientMenuItem.setTitle("Close Second Client");
+                                }
+                                MenuItem reloadSecondClientMenuItem = optionMenu.findItem(R.id.reloadSecondClient);
+                                if (reloadSecondClientMenuItem != null) {
+                                    reloadSecondClientMenuItem.setEnabled(true);
+                                }
+                            }
                         }
                         return true;
                 }
