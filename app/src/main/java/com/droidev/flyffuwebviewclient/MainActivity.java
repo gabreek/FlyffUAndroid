@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.core.view.WindowCompat;
@@ -19,7 +20,6 @@ import android.view.WindowManager;
 import android.widget.PopupMenu;
 import android.util.DisplayMetrics;
 import android.animation.ObjectAnimator;
-import android.widget.RelativeLayout;
 import android.view.ViewConfiguration;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -30,81 +30,65 @@ import android.widget.Toast;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity {
 
-    WebView mClientWebView, sClientWebView;
+    private List<WebView> webViews = new ArrayList<>();
+    private List<FrameLayout> layouts = new ArrayList<>();
+    private int activeClientIndex = -1;
 
-    FrameLayout mClient, sClient;
+    private LinearLayout linearLayout;
+    private FloatingActionButton floatingActionButton;
 
-    LinearLayout linearLayout;
-
-    FloatingActionButton floatingActionButton;
-
-    Boolean exit = false, isOpen = false;
-
-    TinyDB tinyDB;
-
-    String userAgent = System.getProperty("http.agent");
-
-    Menu optionMenu;
-
-    String url = "https://universe.flyff.com/play";
+    private boolean exit = false;
+    private final String userAgent = System.getProperty("http.agent");
+    private final String url = "https://universe.flyff.com/play";
 
     private int _xDelta;
     private int _yDelta;
     private int screenWidth;
     private int screenHeight;
-    private long downTime; // Added for manual long click detection
-    private float initialRawX; // Added for manual click/drag detection
-    private float initialRawY; // Added for manual click/drag detection
+    private long downTime;
+    private float initialRawX;
+    private float initialRawY;
 
-    private Handler longPressHandler = new Handler();
+    private final Handler longPressHandler = new Handler();
     private Runnable longPressRunnable;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        setTitle("FlyffU Android - Main Client");
+        setTitle("FlyffU Android");
 
-        tinyDB = new TinyDB(this);
-
-        // Allow content to extend into the display cutout area
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
-
-        // Ensure content is drawn behind the status bar
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-
-        // Ensure full screen mode is applied on start
         fullScreenOn();
 
         linearLayout = findViewById(R.id.linearLayout);
-
-        mClient = findViewById(R.id.frameLayoutMainClient);
-
-        sClient = findViewById(R.id.frameLayoutSecondClient);
-
-        mClientWebView = new WebView(getApplicationContext());
-
-        sClientWebView = new WebView(getApplicationContext());
-
         floatingActionButton = findViewById(R.id.fab);
-
-        // Set initial alpha
         floatingActionButton.setAlpha(0.5f);
 
-        // Get screen dimensions
         DisplayMetrics displayMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         screenWidth = displayMetrics.widthPixels;
         screenHeight = displayMetrics.heightPixels;
 
+        setupFabTouchListener();
+
+        if (savedInstanceState == null) {
+            createNewClient();
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void setupFabTouchListener() {
         longPressRunnable = () -> floatingActionButton.performLongClick();
 
         floatingActionButton.setOnTouchListener((view, event) -> {
@@ -113,245 +97,178 @@ public class MainActivity extends AppCompatActivity {
 
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN:
-                    downTime = event.getDownTime(); // Record down time
-                    initialRawX = event.getRawX(); // Record initial raw X
-                    initialRawY = event.getRawY(); // Record initial raw Y
-
+                    downTime = event.getDownTime();
+                    initialRawX = event.getRawX();
+                    initialRawY = event.getRawY();
                     _xDelta = (int) (X - view.getX());
                     _yDelta = (int) (Y - view.getY());
-
                     longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout());
-                    return true; // Consume ACTION_DOWN to prevent system long click detection
+                    return true;
                 case MotionEvent.ACTION_UP:
                     longPressHandler.removeCallbacks(longPressRunnable);
-
                     long eventDuration = event.getEventTime() - downTime;
                     float deltaX = Math.abs(event.getRawX() - initialRawX);
                     float deltaY = Math.abs(event.getRawY() - initialRawY);
-
                     int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
 
                     if (deltaX < touchSlop && deltaY < touchSlop) {
-                        // It's a click or long click, not a drag
                         if (eventDuration < ViewConfiguration.getLongPressTimeout()) {
                             view.performClick();
                         }
                     } else {
-                        // It's a drag, snap to edge if needed
-                        int fabWidth = view.getWidth();
-                        float currentX = view.getX();
-
-                        float targetX = currentX;
-
-                        // If more than 50% out of screen, snap back to 50% visible
-                        if (currentX < -fabWidth * 0.5f) { // Left side
-                            targetX = -fabWidth * 0.5f;
-                        } else if (currentX > screenWidth - fabWidth * 0.5f) { // Right side
-                            targetX = screenWidth - fabWidth * 0.5f;
-                        }
-
-                        if (targetX != currentX) {
-                            ObjectAnimator animatorX = ObjectAnimator.ofFloat(view, "x", targetX);
-                            animatorX.setDuration(200);
-                            animatorX.start();
-                        }
+                        snapFabToEdge(view);
                     }
-                    return true; // Always consume the event in ACTION_UP
+                    return true;
                 case MotionEvent.ACTION_MOVE:
                     int currentTouchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
                     float currentDeltaX = Math.abs(event.getRawX() - initialRawX);
                     float currentDeltaY = Math.abs(event.getRawY() - initialRawY);
-
                     if (currentDeltaX > currentTouchSlop || currentDeltaY > currentTouchSlop) {
                         longPressHandler.removeCallbacks(longPressRunnable);
                     }
-
                     view.setX(X - _xDelta);
                     view.setY(Y - _yDelta);
-                    return true; // Consume the event during drag
+                    return true;
             }
-            return false; // Default to false
+            return false;
         });
 
-        floatingActionButton.setOnClickListener(view -> {
-            if (sClient.getVisibility() == View.VISIBLE) {
-                sClient.setVisibility(View.GONE);
-                mClient.setVisibility(View.VISIBLE);
-                setTitle("FlyffU Android - Main Client");
-            } else if (sClient.getVisibility() == View.GONE) {
-                sClient.setVisibility(View.VISIBLE);
-                mClient.setVisibility(View.GONE);
-                setTitle("FlyffU Android - Second Client");
-            }
-        });
+        floatingActionButton.setOnClickListener(view -> switchToNextClient());
 
         floatingActionButton.setOnLongClickListener(view -> {
-            PopupMenu popup = new PopupMenu(MainActivity.this, view);
-            popup.getMenuInflater().inflate(R.menu.main_activity_menu, popup.getMenu());
-
-            // Add "Show Both Side by Side" option
-            popup.getMenu().add(Menu.NONE, R.id.showBothClients, Menu.NONE, "Show Both Side by Side");
-
-            popup.setOnMenuItemClickListener(item -> {
-                switch (item.getItemId()) {
-                    case R.id.secondClient:
-                        if (sClient.getVisibility() == View.GONE && !isOpen) {
-                            sClient.setVisibility(View.VISIBLE);
-                            secondClient();
-                            item.setTitle("Close Second Client");
-                            // Update the activity's menu item as well if it exists
-                            if (optionMenu != null) {
-                                MenuItem secondClientMenuItem = optionMenu.findItem(R.id.secondClient);
-                                if (secondClientMenuItem != null) {
-                                    secondClientMenuItem.setTitle("Close Second Client");
-                                }
-                                MenuItem reloadSecondClientMenuItem = optionMenu.findItem(R.id.reloadSecondClient);
-                                if (reloadSecondClientMenuItem != null) {
-                                    reloadSecondClientMenuItem.setEnabled(true);
-                                }
-                            }
-                            floatingActionButton.setVisibility(View.VISIBLE);
-                            isOpen = true;
-                        } else {
-                            AlertDialog dialog = new AlertDialog.Builder(MainActivity.this)
-                                    .setCancelable(false)
-                                    .setTitle("Are you sure you want to close the second client?")
-                                    .setPositiveButton("Yes", null)
-                                    .setNegativeButton("No", null)
-                                    .show();
-                            Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-                            positiveButton.setOnClickListener(v -> {
-                                sClient.removeAllViews();
-                                sClientWebView.loadUrl("about:blank");
-                                sClient.setVisibility(View.GONE);
-                                item.setTitle("Open Second Client");
-                                // Update the activity's menu item as well if it exists
-                                if (optionMenu != null) {
-                                    MenuItem secondClientMenuItem = optionMenu.findItem(R.id.secondClient);
-                                    if (secondClientMenuItem != null) {
-                                        secondClientMenuItem.setTitle("Open Second Client");
-                                    }
-                                    MenuItem reloadSecondClientMenuItem = optionMenu.findItem(R.id.reloadSecondClient);
-                                    if (reloadSecondClientMenuItem != null) {
-                                        reloadSecondClientMenuItem.setEnabled(false);
-                                    }
-                                }
-                                if (mClient.getVisibility() == View.GONE) {
-                                    mClient.setVisibility(View.VISIBLE);
-                                }
-                                floatingActionButton.setVisibility(View.GONE);
-                                isOpen = false;
-                                setTitle("FlyffU Android - Main Client");
-                                Toast.makeText(MainActivity.this, "Second Client closed.", Toast.LENGTH_SHORT).show();
-                                dialog.dismiss();
-                            });
-                        }
-                        return true;
-                    case R.id.reloadMainClient:
-                        mClientWebView.loadUrl(url);
-                        return true;
-                    case R.id.reloadSecondClient:
-                        sClientWebView.loadUrl(url);
-                        return true;
-                    case R.id.showBothClients:
-                        sClient.setVisibility(View.VISIBLE);
-                        mClient.setVisibility(View.VISIBLE);
-                        setTitle("FlyffU Android - Both Clients");
-                        if (!isOpen) {
-                            secondClient();
-                            isOpen = true;
-                            // Update the activity's menu item as well if it exists
-                            if (optionMenu != null) {
-                                MenuItem secondClientMenuItem = optionMenu.findItem(R.id.secondClient);
-                                if (secondClientMenuItem != null) {
-                                    secondClientMenuItem.setTitle("Close Second Client");
-                                }
-                                MenuItem reloadSecondClientMenuItem = optionMenu.findItem(R.id.reloadSecondClient);
-                                if (reloadSecondClientMenuItem != null) {
-                                    reloadSecondClientMenuItem.setEnabled(true);
-                                }
-                            }
-                        }
-                        return true;
-                }
-                return false;
-            });
-            popup.show();
+            showClientManagerMenu(view);
             return true;
         });
+    }
 
-        mainClient();
+    private void snapFabToEdge(View view) {
+        int fabWidth = view.getWidth();
+        float currentX = view.getX();
+        float targetX = currentX;
 
-        if (savedInstanceState == null) {
-            mClientWebView.loadUrl(url);
-            sClientWebView.loadUrl(url);
+        if (currentX < -fabWidth * 0.5f) {
+            targetX = -fabWidth * 0.5f;
+        } else if (currentX > screenWidth - fabWidth * 0.5f) {
+            targetX = screenWidth - fabWidth * 0.5f;
+        }
+
+        if (targetX != currentX) {
+            ObjectAnimator.ofFloat(view, "x", targetX).setDuration(200).start();
         }
     }
 
-    @Override
-    public void onBackPressed() {
-        if (exit) {
-            finish();
+    private void showClientManagerMenu(View view) {
+        PopupMenu popup = new PopupMenu(MainActivity.this, view);
+        popup.getMenu().add(Menu.NONE, 1, Menu.NONE, "New Client");
+
+        if (!webViews.isEmpty()) {
+            SubMenu clientsMenu = popup.getMenu().addSubMenu(Menu.NONE, 2, Menu.NONE, "Clients");
+            for (int i = 0; i < webViews.size(); i++) {
+                SubMenu clientSubMenu = clientsMenu.addSubMenu(Menu.NONE, Menu.NONE, i, "Client " + (i + 1));
+                clientSubMenu.add(Menu.NONE, 100 + i, 1, "Switch to");
+                clientSubMenu.add(Menu.NONE, 200 + i, 2, "Kill");
+            }
+        }
+
+        popup.setOnMenuItemClickListener(item -> {
+            int itemId = item.getItemId();
+            if (itemId == 1) { // New Client
+                createNewClient();
+                return true;
+            } else if (itemId >= 100 && itemId < 200) { // Switch to
+                int clientIndex = itemId - 100;
+                switchToClient(clientIndex);
+                return true;
+            } else if (itemId >= 200 && itemId < 300) { // Kill
+                int clientIndex = itemId - 200;
+                confirmKillClient(clientIndex);
+                return true;
+            }
+            return false;
+        });
+        popup.show();
+    }
+
+    private void createNewClient() {
+        FrameLayout frameLayout = new FrameLayout(this);
+        frameLayout.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        linearLayout.addView(frameLayout);
+        layouts.add(frameLayout);
+
+        WebView webView = new WebView(getApplicationContext());
+        createWebViewer(webView, frameLayout);
+        webViews.add(webView);
+
+        switchToClient(webViews.size() - 1);
+        floatingActionButton.setVisibility(View.VISIBLE);
+    }
+
+    private void switchToNextClient() {
+        if (webViews.size() > 1) {
+            int nextIndex = (activeClientIndex + 1) % webViews.size();
+            switchToClient(nextIndex);
+        }
+    }
+
+    private void switchToClient(int index) {
+        if (index < 0 || index >= webViews.size()) return;
+
+        for (int i = 0; i < layouts.size(); i++) {
+            layouts.get(i).setVisibility(i == index ? View.VISIBLE : View.GONE);
+        }
+        activeClientIndex = index;
+        setTitle("FlyffU Android - Client " + (activeClientIndex + 1));
+    }
+
+    private void confirmKillClient(int index) {
+        if (index < 0 || index >= webViews.size()) return;
+
+        AlertDialog dialog = new AlertDialog.Builder(MainActivity.this)
+                .setCancelable(false)
+                .setTitle("Are you sure?")
+                .setMessage("Do you want to kill Client " + (index + 1) + "?")
+                .setPositiveButton("Yes", null)
+                .setNegativeButton("No", null)
+                .show();
+
+        Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        positiveButton.setOnClickListener(v -> {
+            killClient(index);
+            dialog.dismiss();
+        });
+    }
+
+    private void killClient(int index) {
+        if (index < 0 || index >= webViews.size()) return;
+
+        WebView webViewToKill = webViews.get(index);
+        FrameLayout layoutToKill = layouts.get(index);
+
+        layoutToKill.removeAllViews();
+        webViewToKill.destroy();
+        linearLayout.removeView(layoutToKill);
+
+        webViews.remove(index);
+        layouts.remove(index);
+
+        Toast.makeText(this, "Client " + (index + 1) + " killed.", Toast.LENGTH_SHORT).show();
+
+        if (webViews.isEmpty()) {
+            activeClientIndex = -1;
+            setTitle("FlyffU Android");
+            // Optionally, you could close the app or show a "create new client" screen
         } else {
-            Toast.makeText(this, "Press Back again to Exit.",
-                    Toast.LENGTH_SHORT).show();
-            exit = true;
-            new Handler().postDelayed(() -> exit = false, 3 * 1000);
+            if (activeClientIndex >= index) {
+                activeClientIndex = Math.max(0, activeClientIndex - 1);
+            }
+            switchToClient(activeClientIndex);
         }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mClient.removeAllViews();
-        sClient.removeAllViews();
-        mClientWebView.destroy();
-        sClientWebView.destroy();
-    }
-
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Options are now handled by the FAB's long click PopupMenu
-        return super.onOptionsItemSelected(item);
-    }
-
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main_activity_menu, menu);
-
-        optionMenu = menu;
-
-        return super.onCreateOptionsMenu(menu);
-    }
-
-    private void fullScreenOn() {
-        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        if (windowInsetsController != null) {
-            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
-            windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-        }
-        Objects.requireNonNull(getSupportActionBar()).hide();
-    }
-
-    private void fullScreenOff() {
-        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        if (windowInsetsController != null) {
-            windowInsetsController.show(WindowInsetsCompat.Type.systemBars());
-        }
-        Objects.requireNonNull(getSupportActionBar()).show();
-    }
-
-    private void mainClient() {
-
-        createWebViewer(mClientWebView, mClient);
-    }
-
-    private void secondClient() {
-
-        createWebViewer(sClientWebView, sClient);
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
     private void createWebViewer(WebView webView, FrameLayout frameLayout) {
-
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
@@ -382,21 +299,58 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setDisplayZoomControls(false);
 
         frameLayout.addView(webView);
-
         webView.loadUrl(url);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (exit) {
+            finish();
+        } else {
+            Toast.makeText(this, "Press Back again to Exit.", Toast.LENGTH_SHORT).show();
+            exit = true;
+            new Handler().postDelayed(() -> exit = false, 3 * 1000);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        for (WebView webView : webViews) {
+            webView.destroy();
+        }
+        webViews.clear();
+        layouts.clear();
+    }
+
+    private void fullScreenOn() {
+        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (windowInsetsController != null) {
+            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
+            windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        }
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().hide();
+        }
     }
 
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        mClientWebView.saveState(outState);
-        sClientWebView.saveState(outState);
+        // Note: Saving state for multiple WebViews is complex.
+        // This basic implementation only saves the first client's state.
+        if (!webViews.isEmpty()) {
+            webViews.get(0).saveState(outState);
+        }
     }
 
     @Override
     protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
         super.onRestoreInstanceState(savedInstanceState);
-        mClientWebView.restoreState(savedInstanceState);
-        sClientWebView.saveState(savedInstanceState);
+        // Note: Restoring state for multiple WebViews is complex.
+        // This basic implementation only restores the first client's state.
+        if (!webViews.isEmpty()) {
+            webViews.get(0).restoreState(savedInstanceState);
+        }
     }
 }
