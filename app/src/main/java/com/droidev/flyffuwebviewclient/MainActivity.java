@@ -55,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private int _yDelta;
     private int screenWidth;
     private int screenHeight;
+    private boolean isDragging = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,6 +101,7 @@ public class MainActivity extends AppCompatActivity {
 
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN:
+                    isDragging = false;
                     if (view.getTag() != null && view.getTag().equals("snapped")) {
                         ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
                         animatorAlpha.setDuration(100);
@@ -122,12 +124,12 @@ public class MainActivity extends AppCompatActivity {
                     float targetAlpha;
 
                     if (currentX + (fabWidth / 2) < middleX) {
-                        // Snap to left
-                        targetX = -fabWidth / 2; // Half hidden
+                        // Snap to left, leave a bit more visible
+                        targetX = -fabWidth * 0.3f; // Adjust this value as needed
                         targetAlpha = 0.5f; // Partially transparent
                     } else {
-                        // Snap to right
-                        targetX = screenWidth - (fabWidth / 2); // Half hidden
+                        // Snap to right, leave a bit more visible
+                        targetX = screenWidth - fabWidth * 0.7f; // Adjust this value as needed
                         targetAlpha = 0.5f; // Partially transparent
                     }
 
@@ -149,6 +151,9 @@ public class MainActivity extends AppCompatActivity {
                 case MotionEvent.ACTION_POINTER_UP:
                     break;
                 case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(X - (view.getX() + _xDelta)) > 5 || Math.abs(Y - (view.getY() + _yDelta)) > 5) { // Check for significant movement
+                        isDragging = true;
+                    }
                     RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
                     layoutParams.leftMargin = X - _xDelta;
                     layoutParams.topMargin = Y - _yDelta;
@@ -157,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
                     view.setLayoutParams(layoutParams);
                     break;
             }
-            return false; // Return false to allow click listener to work
+            return isDragging; // Return true if dragging to consume event, false otherwise
         });
 
         floatingActionButton.setOnClickListener(view -> {
