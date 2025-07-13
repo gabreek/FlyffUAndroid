@@ -546,6 +546,8 @@ public class MainActivity extends AppCompatActivity {
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
 
         // This is the magic: inject our Java object into the WebView's JS context
         webView.addJavascriptInterface(new LocalStorageInterface(this, clientId), "AndroidLocalStorage");
