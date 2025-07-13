@@ -12,6 +12,9 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -53,8 +56,13 @@ public class MainActivity extends AppCompatActivity {
 
         tinyDB = new TinyDB(this);
 
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // Allow content to extend into the display cutout area
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
+
+        // Ensure content is drawn behind the status bar
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         linearLayout = findViewById(R.id.linearLayout);
 
@@ -210,23 +218,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void fullScreenOn() {
-
-        View decorView = getWindow().getDecorView();
-
+        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (windowInsetsController != null) {
+            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
+            windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        }
         Objects.requireNonNull(getSupportActionBar()).hide();
-
-        int uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-        decorView.setSystemUiVisibility(uiOptions);
     }
 
     private void fullScreenOff() {
-
-        View decorView = getWindow().getDecorView();
-
+        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (windowInsetsController != null) {
+            windowInsetsController.show(WindowInsetsCompat.Type.systemBars());
+        }
         Objects.requireNonNull(getSupportActionBar()).show();
-
-        int uiOptions = View.SYSTEM_UI_FLAG_VISIBLE;
-        decorView.setSystemUiVisibility(uiOptions);
     }
 
     private void mainClient() {
