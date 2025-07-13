@@ -37,7 +37,7 @@
         android:layout_marginRight="5dp"
         android:backgroundTint="@color/white"
         android:src="@drawable/change"
-        android:visibility="gone"
+        android:visibility="visible"
         app:fabSize="normal"
         app:maxImageSize="60dp"
         tools:ignore="ContentDescription" />
