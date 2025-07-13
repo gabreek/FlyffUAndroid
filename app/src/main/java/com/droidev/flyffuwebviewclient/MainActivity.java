@@ -621,6 +621,20 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setDisplayZoomControls(false);
 
         frameLayout.addView(webView);
+        webView.requestFocus(); // Request focus for the WebView
+
+        // Add a touch listener to explicitly request focus and show keyboard on touch
+        webView.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                v.requestFocus();
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT);
+                }
+            }
+            return false; // Allow other touch events to be processed
+        });
+
         webView.loadUrl(initialUrl);
     }
 
