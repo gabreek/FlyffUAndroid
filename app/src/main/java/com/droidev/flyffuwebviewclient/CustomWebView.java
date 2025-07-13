@@ -7,9 +7,6 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.webkit.WebView;
 
-import static android.view.inputmethod.EditorInfo.IME_ACTION_DONE;
-import static android.view.inputmethod.EditorInfo.TYPE_CLASS_TEXT;
-
 public class CustomWebView extends WebView {
     public CustomWebView(Context context) {
         super(context);
@@ -38,9 +35,6 @@ public class CustomWebView extends WebView {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        BaseInputConnection baseInputConnection = new BaseInputConnection(this, true); // true para full editor
-        outAttrs.inputType = TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
-        outAttrs.imeOptions = IME_ACTION_DONE;
-        return baseInputConnection;
+        return new BaseInputConnection(this, true);
     }
 }
