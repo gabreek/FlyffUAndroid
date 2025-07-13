@@ -60,6 +60,9 @@ public class MainActivity extends AppCompatActivity {
     private float initialRawX; // Added for manual click/drag detection
     private float initialRawY; // Added for manual click/drag detection
 
+    private Handler longPressHandler = new Handler();
+    private Runnable longPressRunnable;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,6 +105,8 @@ public class MainActivity extends AppCompatActivity {
         screenWidth = displayMetrics.widthPixels;
         screenHeight = displayMetrics.heightPixels;
 
+        longPressRunnable = () -> floatingActionButton.performLongClick();
+
         floatingActionButton.setOnTouchListener((view, event) -> {
             final int X = (int) event.getRawX();
             final int Y = (int) event.getRawY();
@@ -114,8 +119,12 @@ public class MainActivity extends AppCompatActivity {
 
                     _xDelta = (int) (X - view.getX());
                     _yDelta = (int) (Y - view.getY());
+
+                    longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout());
                     return true; // Consume ACTION_DOWN to prevent system long click detection
                 case MotionEvent.ACTION_UP:
+                    longPressHandler.removeCallbacks(longPressRunnable);
+
                     long eventDuration = event.getEventTime() - downTime;
                     float deltaX = Math.abs(event.getRawX() - initialRawX);
                     float deltaY = Math.abs(event.getRawY() - initialRawY);
@@ -124,9 +133,7 @@ public class MainActivity extends AppCompatActivity {
 
                     if (deltaX < touchSlop && deltaY < touchSlop) {
                         // It's a click or long click, not a drag
-                        if (eventDuration > ViewConfiguration.getLongPressTimeout()) {
-                            view.performLongClick();
-                        } else {
+                        if (eventDuration < ViewConfiguration.getLongPressTimeout()) {
                             view.performClick();
                         }
                     } else {
@@ -151,6 +158,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                     return true; // Always consume the event in ACTION_UP
                 case MotionEvent.ACTION_MOVE:
+                    int currentTouchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
+                    float currentDeltaX = Math.abs(event.getRawX() - initialRawX);
+                    float currentDeltaY = Math.abs(event.getRawY() - initialRawY);
+
+                    if (currentDeltaX > currentTouchSlop || currentDeltaY > currentTouchSlop) {
+                        longPressHandler.removeCallbacks(longPressRunnable);
+                    }
+
                     view.setX(X - _xDelta);
                     view.setY(Y - _yDelta);
                     return true; // Consume the event during drag
