@@ -381,7 +381,7 @@ public class MainActivity extends AppCompatActivity {
         linearLayout.addView(frameLayout);
         layouts.put(clientId, frameLayout);
 
-        WebView webView = new WebView(getApplicationContext());
+        WebView webView = new CustomWebView(getApplicationContext());
         createWebViewer(webView, frameLayout, clientId, targetUrl);
         webViews.put(clientId, webView);
 
@@ -453,7 +453,7 @@ public class MainActivity extends AppCompatActivity {
         linearLayout.addView(frameLayout);
         layouts.put(clientId, frameLayout);
 
-        WebView webView = new WebView(getApplicationContext());
+        WebView webView = new CustomWebView(getApplicationContext());
         createWebViewer(webView, frameLayout, clientId, url);
         webViews.put(clientId, webView);
 
@@ -546,8 +546,6 @@ public class MainActivity extends AppCompatActivity {
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
-        webView.setFocusable(true);
-        webView.setFocusableInTouchMode(true);
 
         // This is the magic: inject our Java object into the WebView's JS context
         webView.addJavascriptInterface(new LocalStorageInterface(this, clientId), "AndroidLocalStorage");
