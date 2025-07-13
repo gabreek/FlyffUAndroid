@@ -46,7 +46,7 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int WIKI_CLIENT_ID = -1;
+    private static final int WIKI_CLIENT_ID = -4;
     private static final int MADRIGAL_CLIENT_ID = -2;
     private static final int FLYFFULATOR_CLIENT_ID = -3;
 
