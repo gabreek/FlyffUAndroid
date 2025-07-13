@@ -125,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
 
                     // Define a threshold for what constitutes a "click" vs. a "drag"
                     int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
+                    int dragThreshold = touchSlop * 2; // A larger threshold for dragging
 
                     if (Math.abs(deltaX) < touchSlop && Math.abs(deltaY) < touchSlop) {
                         // It's a click or long click, not a drag
@@ -133,40 +134,50 @@ public class MainActivity extends AppCompatActivity {
                         } else {
                             view.performClick();
                         }
-                    }
+                        // Restore full opacity if it was hidden
+                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
+                        animatorAlpha.setDuration(100);
+                        animatorAlpha.start();
+                        view.setTag(null); // Remove snapped tag
+                    } else if (Math.abs(deltaX) > dragThreshold || Math.abs(deltaY) > dragThreshold) {
+                        // It's a significant drag, so snap to edge
+                        int fabWidth = view.getWidth();
+                        // Determine which side to snap to
+                        int middleX = screenWidth / 2;
+                        float currentX = view.getX();
 
-                    int fabWidth = view.getWidth();
-                    int fabHeight = view.getHeight();
+                        float targetX;
+                        float targetAlpha;
 
-                    // Determine which side to snap to
-                    int middleX = screenWidth / 2;
-                    float currentX = view.getX();
+                        if (currentX + (fabWidth / 2) < middleX) {
+                            // Snap to left, leave a bit more visible
+                            targetX = -fabWidth * 0.3f; // Adjust this value as needed
+                            targetAlpha = 0.5f; // Partially transparent
+                        } else {
+                            // Snap to right, leave a bit more visible
+                            targetX = screenWidth - fabWidth * 0.7f; // Adjust this value as needed
+                            targetAlpha = 0.5f; // Partially transparent
+                        }
 
-                    float targetX;
-                    float targetAlpha;
+                        // Animate the FAB to the target position and alpha
+                        ObjectAnimator animatorX = ObjectAnimator.ofFloat(view, "x", targetX);
+                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", targetAlpha);
 
-                    if (currentX + (fabWidth / 2) < middleX) {
-                        // Snap to left, leave a bit more visible
-                        targetX = -fabWidth * 0.3f; // Adjust this value as needed
-                        targetAlpha = 0.5f; // Partially transparent
+                        animatorX.setDuration(200);
+                        animatorAlpha.setDuration(200);
+
+                        animatorX.start();
+                        animatorAlpha.start();
+
+                        // Set a tag to indicate it's snapped
+                        view.setTag("snapped");
                     } else {
-                        // Snap to right, leave a bit more visible
-                        targetX = screenWidth - fabWidth * 0.7f; // Adjust this value as needed
-                        targetAlpha = 0.5f; // Partially transparent
+                        // Small drag, not a click, not a snap. Just restore full opacity.
+                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
+                        animatorAlpha.setDuration(100);
+                        animatorAlpha.start();
+                        view.setTag(null); // Remove snapped tag
                     }
-
-                    // Animate the FAB to the target position and alpha
-                    ObjectAnimator animatorX = ObjectAnimator.ofFloat(view, "x", targetX);
-                    ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", targetAlpha);
-
-                    animatorX.setDuration(200);
-                    animatorAlpha.setDuration(200);
-
-                    animatorX.start();
-                    animatorAlpha.start();
-
-                    // Set a tag to indicate it's snapped
-                    view.setTag("snapped");
                     break;
                 case MotionEvent.ACTION_POINTER_DOWN:
                     break;
