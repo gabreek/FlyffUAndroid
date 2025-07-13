@@ -114,6 +114,20 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public class WebAppInterface {
+        Context mContext;
+
+        WebAppInterface(Context c) {
+            mContext = c;
+        }
+
+        @JavascriptInterface
+        public void showKeyboard() {
+            InputMethodManager imm = (InputMethodManager) mContext.getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY);
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -550,6 +564,7 @@ public class MainActivity extends AppCompatActivity {
 
         // This is the magic: inject our Java object into the WebView's JS context
         webView.addJavascriptInterface(new LocalStorageInterface(this, clientId), "AndroidLocalStorage");
+        webView.addJavascriptInterface(new WebAppInterface(this), "FlyffUAndroid");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -561,22 +576,34 @@ public class MainActivity extends AppCompatActivity {
                         "window.localStorage.getItem = function(key) { return AndroidLocalStorage.getItem(key); }; " +
                         "window.localStorage.removeItem = function(key) { AndroidLocalStorage.removeItem(key); }; " +
                         "window.localStorage.clear = function() { AndroidLocalStorage.clear(); }; " +
+                        // Detectar foco em inputs e textareas
+                        "var inputs = document.getElementsByTagName('input');" +
+                        "var textareas = document.getElementsByTagName('textarea');" +
+                        "var elements = Array.from(inputs).concat(Array.from(textareas));" +
+                        "for (var i = 0; i < elements.length; i++) {" +
+                        "  elements[i].addEventListener('focus', function() {" +
+                        "    window.FlyffUAndroid.showKeyboard();" +
+                        "  });" +
+                        "}" +
+                        // Detectar cliques no canvas
+                        "var canvas = document.getElementsByTagName('canvas')[0];" +
+                        "if (canvas) {" +
+                        "  canvas.addEventListener('click', function() {" +
+                        "    var input = document.createElement('input');" +
+                        "    input.type = 'text';" +
+                        "    input.style.position = 'absolute';" +
+                        "    input.style.opacity = '0';" +
+                        "    document.body.appendChild(input);" +
+                        "    input.focus();" +
+                        "    window.FlyffUAndroid.showKeyboard();" +
+                        "  });" +
+                        "}" +
                         "})()", null);
             }
         });
 
         // Add WebChromeClient to handle UI-related events, including keyboard
         webView.setWebChromeClient(new WebChromeClient());
-
-        // Force keyboard to show when WebView gains focus
-        webView.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
-                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                if (imm != null) {
-                    imm.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT);
-                }
-            }
-        });
         
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);

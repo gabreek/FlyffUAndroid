@@ -36,14 +36,11 @@ public class CustomWebView extends WebView {
         return true;
     }
 
-    // Commenting out onCreateInputConnection as per user's suggestion
-    /*
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        BaseInputConnection baseInputConnection = new BaseInputConnection(this, false);
+        BaseInputConnection baseInputConnection = new BaseInputConnection(this, true); // true para full editor
+        outAttrs.inputType = TYPE_CLASS_TEXT | EditorInfo.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD;
         outAttrs.imeOptions = IME_ACTION_DONE;
-        outAttrs.inputType = TYPE_CLASS_TEXT;
         return baseInputConnection;
     }
-    */
 }
