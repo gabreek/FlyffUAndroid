@@ -24,6 +24,7 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -562,6 +563,9 @@ public class MainActivity extends AppCompatActivity {
                         "})()", null);
             }
         });
+
+        // Add WebChromeClient to handle UI-related events, including keyboard
+        webView.setWebChromeClient(new WebChromeClient());
         
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
