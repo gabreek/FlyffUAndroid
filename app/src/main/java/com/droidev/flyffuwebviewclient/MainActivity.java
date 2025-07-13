@@ -438,13 +438,6 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    private String getClientDisplayName(int clientId) {
-        TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
-        String customName = db.getString(CLIENT_NAME_KEY);
-        String displayName = customName != null && !customName.isEmpty() ? customName : "Client " + clientId;
-        return displayName;
-    }
-
     private void killClient(int clientId) {
         if (webViews.get(clientId) == null) return;
 
