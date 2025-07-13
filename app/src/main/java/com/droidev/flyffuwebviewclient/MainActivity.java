@@ -56,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
     private int _yDelta;
     private int screenWidth;
     private int screenHeight;
+    private boolean isBeingDragged = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -89,6 +90,9 @@ public class MainActivity extends AppCompatActivity {
 
         floatingActionButton = findViewById(R.id.fab);
 
+        // Set initial alpha
+        floatingActionButton.setAlpha(0.5f);
+
         // Get screen dimensions
         DisplayMetrics displayMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
@@ -103,65 +107,37 @@ public class MainActivity extends AppCompatActivity {
                 case MotionEvent.ACTION_DOWN:
                     _xDelta = (int) (X - view.getX());
                     _yDelta = (int) (Y - view.getY());
-                    // Restore full opacity if it was hidden
-                    if (view.getTag() != null && view.getTag().equals("snapped")) {
-                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
-                        animatorAlpha.setDuration(100);
-                        animatorAlpha.start();
-                        view.setTag(null); // Remove snapped tag
-                    }
-                    break;
+                    isBeingDragged = false;
+                    return false; // Let system handle click/long click
                 case MotionEvent.ACTION_UP:
-                    int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
-                    float deltaX = Math.abs(X - (view.getX() + _xDelta));
-                    float deltaY = Math.abs(Y - (view.getY() + _yDelta));
-
-                    if (deltaX < touchSlop && deltaY < touchSlop) {
-                        // It's a click, let the OnClickListener handle it
-                        return false;
-                    } else {
-                        // It's a drag, snap to edge
+                    if (isBeingDragged) {
                         int fabWidth = view.getWidth();
-                        int middleX = screenWidth / 2;
                         float currentX = view.getX();
 
-                        float targetX;
-                        float targetAlpha;
+                        float targetX = currentX;
 
-                        if (currentX + (fabWidth / 2) < middleX) {
-                            // Snap to left, leave a bit more visible
-                            targetX = -fabWidth * 0.3f; // Adjust this value as needed
-                            targetAlpha = 0.5f; // Partially transparent
-                        } else {
-                            // Snap to right, leave a bit more visible
-                            targetX = screenWidth - fabWidth * 0.7f; // Adjust this value as needed
-                            targetAlpha = 0.5f; // Partially transparent
+                        // If more than 50% out of screen, snap back to 50% visible
+                        if (currentX < -fabWidth * 0.5f) { // Left side
+                            targetX = -fabWidth * 0.5f;
+                        } else if (currentX > screenWidth - fabWidth * 0.5f) { // Right side
+                            targetX = screenWidth - fabWidth * 0.5f;
                         }
 
-                        // Animate the FAB to the target position and alpha
-                        ObjectAnimator animatorX = ObjectAnimator.ofFloat(view, "x", targetX);
-                        ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", targetAlpha);
-
-                        animatorX.setDuration(200);
-                        animatorAlpha.setDuration(200);
-
-                        animatorX.start();
-                        animatorAlpha.start();
-
-                        // Set a tag to indicate it's snapped
-                        view.setTag("snapped");
-                        return true; // Consume the event
+                        if (targetX != currentX) {
+                            ObjectAnimator animatorX = ObjectAnimator.ofFloat(view, "x", targetX);
+                            animatorX.setDuration(200);
+                            animatorX.start();
+                        }
+                        return true; // Consume the event if it was a drag
                     }
-                case MotionEvent.ACTION_POINTER_DOWN:
-                    break;
-                case MotionEvent.ACTION_POINTER_UP:
-                    break;
+                    return false; // Let system handle click/long click
                 case MotionEvent.ACTION_MOVE:
+                    isBeingDragged = true;
                     view.setX(X - _xDelta);
                     view.setY(Y - _yDelta);
                     return true; // Consume the event during drag
             }
-            return false; // Default to false, let other listeners handle it
+            return false; // Default to false
         });
 
         floatingActionButton.setOnClickListener(view -> {
