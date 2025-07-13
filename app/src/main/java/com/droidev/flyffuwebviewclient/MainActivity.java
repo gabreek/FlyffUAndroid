@@ -515,6 +515,16 @@ public class MainActivity extends AppCompatActivity {
         }
         activeClientId = clientId;
         setTitle(getClientDisplayName(activeClientId));
+
+        // Request focus for the active WebView and hide keyboard if visible
+        WebView activeWebView = webViews.get(activeClientId);
+        if (activeWebView != null) {
+            activeWebView.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(activeWebView.getWindowToken(), 0);
+            }
+        }
     }
 
     private void confirmKillClient(int clientId) {
