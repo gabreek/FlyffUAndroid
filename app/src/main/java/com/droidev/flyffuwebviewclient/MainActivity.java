@@ -20,6 +20,7 @@ import android.widget.PopupMenu;
 import android.util.DisplayMetrics;
 import android.animation.ObjectAnimator;
 import android.widget.RelativeLayout;
+import android.view.ViewConfiguration;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.Button;
@@ -55,8 +56,9 @@ public class MainActivity extends AppCompatActivity {
     private int _yDelta;
     private int screenWidth;
     private int screenHeight;
-    private float initialTouchX;
-    private float initialTouchY;
+    private long downTime;
+    private float initialRawX;
+    private float initialRawY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,8 +104,9 @@ public class MainActivity extends AppCompatActivity {
 
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN:
-                    initialTouchX = event.getRawX();
-                    initialTouchY = event.getRawY();
+                    downTime = event.getDownTime();
+                    initialRawX = event.getRawX();
+                    initialRawY = event.getRawY();
 
                     if (view.getTag() != null && view.getTag().equals("snapped")) {
                         ObjectAnimator animatorAlpha = ObjectAnimator.ofFloat(view, "alpha", 1.0f);
@@ -116,12 +119,20 @@ public class MainActivity extends AppCompatActivity {
                     _yDelta = Y - lParams.topMargin;
                     break;
                 case MotionEvent.ACTION_UP:
-                    float deltaX = event.getRawX() - initialTouchX;
-                    float deltaY = event.getRawY() - initialTouchY;
+                    long eventDuration = event.getEventTime() - downTime;
+                    float deltaX = event.getRawX() - initialRawX;
+                    float deltaY = event.getRawY() - initialRawY;
 
-                    // Consider it a click if movement is small
-                    if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
-                        view.performClick();
+                    // Define a threshold for what constitutes a "click" vs. a "drag"
+                    int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
+
+                    if (Math.abs(deltaX) < touchSlop && Math.abs(deltaY) < touchSlop) {
+                        // It's a click or long click, not a drag
+                        if (eventDuration > ViewConfiguration.getLongPressTimeout()) {
+                            view.performLongClick();
+                        } else {
+                            view.performClick();
+                        }
                     }
 
                     int fabWidth = view.getWidth();
