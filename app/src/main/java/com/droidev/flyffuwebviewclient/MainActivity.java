@@ -56,7 +56,10 @@ public class MainActivity extends AppCompatActivity {
     private int _yDelta;
     private int screenWidth;
     private int screenHeight;
-    private boolean isBeingDragged = false;
+    private long downTime; // Added for manual long click detection
+    private float initialRawX; // Added for manual click/drag detection
+    private float initialRawY; // Added for manual click/drag detection
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,12 +108,29 @@ public class MainActivity extends AppCompatActivity {
 
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
                 case MotionEvent.ACTION_DOWN:
+                    downTime = event.getDownTime(); // Record down time
+                    initialRawX = event.getRawX(); // Record initial raw X
+                    initialRawY = event.getRawY(); // Record initial raw Y
+
                     _xDelta = (int) (X - view.getX());
                     _yDelta = (int) (Y - view.getY());
-                    isBeingDragged = false;
                     return true; // Consume ACTION_DOWN to prevent system long click detection
                 case MotionEvent.ACTION_UP:
-                    if (isBeingDragged) {
+                    long eventDuration = event.getEventTime() - downTime;
+                    float deltaX = Math.abs(event.getRawX() - initialRawX);
+                    float deltaY = Math.abs(event.getRawY() - initialRawY);
+
+                    int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
+
+                    if (deltaX < touchSlop && deltaY < touchSlop) {
+                        // It's a click or long click, not a drag
+                        if (eventDuration > ViewConfiguration.getLongPressTimeout()) {
+                            view.performLongClick();
+                        } else {
+                            view.performClick();
+                        }
+                    } else {
+                        // It's a drag, snap to edge if needed
                         int fabWidth = view.getWidth();
                         float currentX = view.getX();
 
@@ -128,11 +148,9 @@ public class MainActivity extends AppCompatActivity {
                             animatorX.setDuration(200);
                             animatorX.start();
                         }
-                        return true; // Consume the event if it was a drag
                     }
-                    return false; // Let system handle click/long click if not dragged
+                    return true; // Always consume the event in ACTION_UP
                 case MotionEvent.ACTION_MOVE:
-                    isBeingDragged = true;
                     view.setX(X - _xDelta);
                     view.setY(Y - _yDelta);
                     return true; // Consume the event during drag
