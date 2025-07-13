@@ -49,7 +49,12 @@ public class TinyDB {
     private String lastImagePath = "";
 
     public TinyDB(Context appContext) {
-        preferences = PreferenceManager.getDefaultSharedPreferences(appContext);
+        // Default constructor for backward compatibility
+        this(appContext, "default_prefs");
+    }
+
+    public TinyDB(Context appContext, String prefsName) {
+        preferences = appContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE);
         context = appContext;
     }
 
