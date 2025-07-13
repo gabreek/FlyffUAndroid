@@ -247,8 +247,8 @@ public class MainActivity extends AppCompatActivity {
                 else if (itemId < 3000) clientId = itemId - 2000; // Kill
                 else if (itemId < 4000) clientId = itemId - 3000; // Open
                 else if (itemId < 5000) clientId = itemId - 4000; // Rename
-                else if (itemId < 6000) clientId = itemId - 5000; // Delete
-                else if (itemId < 7000) clientId = itemId - 6000; // Utils
+                else if (itemId < 7000) clientId = itemId - 6000; // Utils (Moved this up)
+                else if (itemId < 6000) clientId = itemId - 5000; // Delete (This range is now checked after Utils)
             }
 
             if (itemId == 1) { // New Client
@@ -267,11 +267,11 @@ public class MainActivity extends AppCompatActivity {
                 } else if (itemId >= 4000 && itemId < 5000) { // Rename
                     showRenameDialog(clientId);
                     return true;
-                } else if (itemId >= 5000 && itemId < 6000) { // Delete
-                    confirmDeleteClient(clientId);
-                    return true;
-                } else if (itemId >= 6000 && itemId < 7000) { // Utils
+                } else if (itemId >= 6000 && itemId < 7000) { // Utils (Moved this up)
                     openUtilityClient(clientId);
+                    return true;
+                } else if (itemId >= 5000 && itemId < 6000) { // Delete (This range is now checked after Utils)
+                    confirmDeleteClient(clientId);
                     return true;
                 }
             }
