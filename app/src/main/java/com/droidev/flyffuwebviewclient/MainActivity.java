@@ -18,6 +18,7 @@ import android.util.SparseArray;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
+import android.view.inputmethod.InputMethodManager;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -566,6 +567,16 @@ public class MainActivity extends AppCompatActivity {
 
         // Add WebChromeClient to handle UI-related events, including keyboard
         webView.setWebChromeClient(new WebChromeClient());
+
+        // Force keyboard to show when WebView gains focus
+        webView.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT);
+                }
+            }
+        });
         
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
