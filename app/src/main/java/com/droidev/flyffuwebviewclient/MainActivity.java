@@ -614,6 +614,97 @@ public class MainActivity extends AppCompatActivity {
 
         // Add WebChromeClient to handle UI-related events, including keyboard
         webView.setWebChromeClient(new WebChromeClient());
+        String binCacheJs = "(function() {" +
+                                    "  const BIN_REGEXP = /\.bin$/i;" +
+                                    "  const CACHE_NAME = 'flyff-bin-v1';" +
+                                    "  const IDB_NAME   = 'flyff_bin_cache';" +
+                                    "  const IDB_STORE  = 'blobs';" +
+                                    "  const IDB_VER    = 1;" +
+                                    "" +
+                                    "  /* ---------- IndexedDB helper ---------- */" +
+                                    "  let dbPromise = new Promise((resolve, reject) => {" +
+                                    "    const req = indexedDB.open(IDB_NAME, IDB_VER);" +
+                                    "    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);" +
+                                    "    req.onsuccess = () => resolve(req.result);" +
+                                    "    req.onerror   = () => reject(req.error);" +
+                                    "  });" +
+                                    "" +
+                                    "  /* ---------- key normalisation ---------- */" +
+                                    "  function cacheKey(url) {" +
+                                    "    // keep only protocol://host/path; drop query & hash" +
+                                    "    try {" +
+                                    "      const u = new URL(url);" +
+                                    "      return u.origin + u.pathname;" +
+                                    "    } catch (_) {" +
+                                    "      return url.split('?')[0];   // fallback for IE11/old WebView" +
+                                    "    }" +
+                                    "  }" +
+                                    "" +
+                                    "  async function getBinFromIDB(url) {" +
+                                    "    const db = await dbPromise;" +
+                                    "    return db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(cacheKey(url));" +
+                                    "  }" +
+                                    "" +
+                                    "  async function putBinToIDB(url, blob) {" +
+                                    "    const db = await dbPromise;" +
+                                    "    return db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(blob, cacheKey(url));" +
+                                    "  }" +
+                                    "" +
+                                    "  /* ---------- XHR hook ---------- */" +
+                                    "  const NativeXHR = window.XMLHttpRequest;" +
+                                    "  function PatchedXHR() {" +
+                                    "    const xhr = new NativeXHR();" +
+                                    "    const nativeOpen = xhr.open;" +
+                                    "    const nativeSend = xhr.send;" +
+                                    "" +
+                                    "    xhr.open = function(method, url, ...rest) {" +
+                                    "      this._url = url;" +
+                                    "      if (BIN_REGEXP.test(url)) {" +
+                                    "        this._isBin = true;" +
+                                    "      }" +
+                                    "      return nativeOpen.call(this, method, url, ...rest);" +
+                                    "    };" +
+                                    "" +
+                                    "    xhr.send = function(...args) {" +
+                                    "      if (!this._isBin) return nativeSend.apply(this, args);" +
+                                    "" +
+                                    "      const url = this._url;" +
+                                    "      getBinFromIDB(url).then(blob => {" +
+                                    "        if (blob) {" +
+                                    "          // Cache hit: return instantly" +
+                                    "          Object.defineProperty(this, 'response', {writable: true});" +
+                                    "          Object.defineProperty(this, 'responseText', {writable: true});" +
+                                    "          Object.defineProperty(this, 'readyState', {writable: true});" +
+                                    "          Object.defineProperty(this, 'status', {writable: true});" +
+                                    "          Object.defineProperty(this, 'statusText', {writable: true});" +
+                                    "" +
+                                    "          this.response     = blob;" +
+                                    "          this.responseText = '';" +
+                                    "          this.readyState   = 4;" +
+                                    "          this.status       = 200;" +
+                                    "          this.statusText   = 'OK';" +
+                                    "" +
+                                    "          if (this.onreadystatechange) this.onreadystatechange();" +
+                                    "          if (this.onload) this.onload();" +
+                                    "          return;" +
+                                    "        }" +
+                                    "" +
+                                    "        // Cache miss: use native XHR, then store" +
+                                    "        xhr.addEventListener('load', () => {" +
+                                    "          if (xhr.status === 200 && xhr.response instanceof Blob) {" +
+                                    "            putBinToIDB(url, xhr.response);" +
+                                    "          }" +
+                                    "        });" +
+                                    "        nativeSend.apply(this, args);" +
+                                    "      });" +
+                                    "    };" +
+                                    "    return xhr;" +
+                                    "  }" +
+                                    "" +
+                                    "  Object.defineProperty(window, 'XMLHttpRequest', {value: PatchedXHR, writable: false});" +
+                                    "})();";
+                webView.evaluateJavascript(binCacheJs, null);
+            }
         
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
