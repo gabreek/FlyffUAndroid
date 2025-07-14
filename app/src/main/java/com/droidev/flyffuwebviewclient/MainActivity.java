@@ -690,8 +690,8 @@ public class MainActivity extends AppCompatActivity {
         // Create the round FloatingActionButton
         FloatingActionButton newFab = new FloatingActionButton(this);
         newFab.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        newFab.setBackgroundTintList(ColorStateList.valueOf(Color.TRANSPARENT)); // Make background transparent
-        newFab.setUseCompatPadding(false); // Remove padding to center text
+        newFab.setBackgroundTintList(ColorStateList.valueOf(Color.BLACK)); // Set background to black
+        newFab.setUseCompatPadding(true); // Re-enable padding
         newFab.setImageDrawable(null); // No icon
 
         // Create the TextView for the label
@@ -701,6 +701,8 @@ public class MainActivity extends AppCompatActivity {
         label.setTextColor(Color.WHITE);
         label.setGravity(Gravity.CENTER);
         label.setTextSize(14); // Slightly increased text size
+        label.setClickable(false); // Ensure TextView does not consume clicks
+        label.setFocusable(false); // Ensure TextView does not consume focus
 
         // Add FAB and TextView to the container
         fabContainer.addView(newFab);
@@ -754,7 +756,6 @@ public class MainActivity extends AppCompatActivity {
                     v.setY(Y - yDelta[0]);
                     return true;
             }
-            rootContainer.invalidate();
             return false;
         });
     }
