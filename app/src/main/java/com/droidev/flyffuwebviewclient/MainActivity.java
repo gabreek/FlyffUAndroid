@@ -682,15 +682,16 @@ public class MainActivity extends AppCompatActivity {
 
         // Create a FrameLayout to hold the FAB and the TextView
         FrameLayout fabContainer = new FrameLayout(this);
-        int fabSize = (int) (floatingActionButton.getHeight() * 0.7); // 70% of original FAB size
+        int fabSize = (int) (floatingActionButton.getHeight() * 0.85); // Increased size
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSize, fabSize);
         fabContainer.setLayoutParams(containerParams);
+        fabContainer.setAlpha(0.5f); // Set transparency
 
         // Create the round FloatingActionButton
         FloatingActionButton newFab = new FloatingActionButton(this);
         newFab.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        newFab.setBackgroundTintList(ColorStateList.valueOf(Color.BLACK));
-        newFab.setUseCompatPadding(true);
+        newFab.setBackgroundTintList(ColorStateList.valueOf(Color.TRANSPARENT)); // Make background transparent
+        newFab.setUseCompatPadding(false); // Remove padding to center text
         newFab.setImageDrawable(null); // No icon
 
         // Create the TextView for the label
@@ -699,7 +700,7 @@ public class MainActivity extends AppCompatActivity {
         label.setText(keyText);
         label.setTextColor(Color.WHITE);
         label.setGravity(Gravity.CENTER);
-        label.setTextSize(12);
+        label.setTextSize(14); // Slightly increased text size
 
         // Add FAB and TextView to the container
         fabContainer.addView(newFab);
@@ -744,6 +745,8 @@ public class MainActivity extends AppCompatActivity {
                     int slop = ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
                     if (dx < slop && dy < slop && eventDuration < ViewConfiguration.getLongPressTimeout()) {
                         v.performClick();
+                    } else {
+                        snapFabToEdge(v);
                     }
                     return true;
                 case MotionEvent.ACTION_MOVE:
