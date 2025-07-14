@@ -1,30 +1,26 @@
 package com.droidev.flyffuwebviewclient;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
-
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.util.SparseArray;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
-import android.view.inputmethod.InputMethodManager;
 import android.view.SubMenu;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -34,9 +30,16 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.io.File;
@@ -90,7 +93,7 @@ public class MainActivity extends AppCompatActivity {
     private final Handler longPressHandler = new Handler();
     private Runnable longPressRunnable;
 
-    /* JS 
+    /* JS
  Android bridges */
     public static class LocalStorageInterface {
         private final TinyDB db;
@@ -415,12 +418,13 @@ public class MainActivity extends AppCompatActivity {
                 SubMenu sm = sub.addSubMenu(getClientDisplayName(id));
                 boolean open = webViews.get(id) != null;
                 if (open) {
+                    sm.add(Menu.NONE, 6000 + id, 5, "Action Buttons");
                     sm.add(Menu.NONE, 1000 + id, 1, "Switch");
                     sm.add(Menu.NONE, 2000 + id, 2, "Kill");
                 } else sm.add(Menu.NONE, 3000 + id, 1, "Open");
                 sm.add(Menu.NONE, 4000 + id, 3, "Rename");
                 sm.add(Menu.NONE, 5000 + id, 4, "Delete");
-                sm.add(Menu.NONE, 6000 + id, 5, "Action Buttons");
+
             }
         }
         SubMenu util = popup.getMenu().addSubMenu(Menu.NONE, 3, Menu.NONE, "Utils");
@@ -676,37 +680,53 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        ExtendedFloatingActionButton newFab = new ExtendedFloatingActionButton(this);
-        newFab.setText(keyText);
-        newFab.setAlpha(0.7f);
+        // Create a FrameLayout to hold the FAB and the TextView
+        FrameLayout fabContainer = new FrameLayout(this);
+        int fabSize = (int) (floatingActionButton.getHeight() * 0.7); // 70% of original FAB size
+        FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSize, fabSize);
+        fabContainer.setLayoutParams(containerParams);
 
-        ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        newFab.setLayoutParams(layoutParams);
+        // Create the round FloatingActionButton
+        FloatingActionButton newFab = new FloatingActionButton(this);
+        newFab.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        newFab.setBackgroundTintList(ColorStateList.valueOf(Color.BLACK));
+        newFab.setUseCompatPadding(true);
+        newFab.setImageDrawable(null); // No icon
 
-        newFab.setOnClickListener(v -> {
-            dispatchKeyEvent(targetWebView, keyCode);
-        });
+        // Create the TextView for the label
+        TextView label = new TextView(this);
+        label.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        label.setText(keyText);
+        label.setTextColor(Color.WHITE);
+        label.setGravity(Gravity.CENTER);
+        label.setTextSize(12);
 
-        rootContainer.addView(newFab);
-        customFabMap.put(newFab, targetWebView);
+        // Add FAB and TextView to the container
+        fabContainer.addView(newFab);
+        fabContainer.addView(label);
 
-        makeFabDraggable(newFab);
+        // Set the click listener on the container
+        fabContainer.setOnClickListener(v -> dispatchKeyEvent(targetWebView, keyCode));
+
+        // Add the container to the root view and the map
+        rootContainer.addView(fabContainer);
+        customFabMap.put(fabContainer, targetWebView);
+
+        // Make the entire container draggable
+        makeFabDraggable(fabContainer);
 
         Toast.makeText(this, "Action Button for '" + keyText + "' created.", Toast.LENGTH_SHORT).show();
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private void makeFabDraggable(ExtendedFloatingActionButton fab) {
+    private void makeFabDraggable(View view) {
         final float[] xDelta = new float[1];
         final float[] yDelta = new float[1];
         final float[] initialRawX = new float[1];
         final float[] initialRawY = new float[1];
         final long[] downTime = new long[1];
 
-        fab.setOnTouchListener((v, event) -> {
+        view.setOnTouchListener((v, event) -> {
             int X = (int) event.getRawX();
             int Y = (int) event.getRawY();
             switch (event.getAction() & MotionEvent.ACTION_MASK) {
@@ -746,8 +766,35 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void dispatchKeyEvent(WebView webView, int keyCode) {
-        String script = "document.dispatchEvent(new KeyboardEvent('keydown', {'keyCode':" + keyCode + "}));"
-                        + "document.dispatchEvent(new KeyboardEvent('keyup', {'keyCode':" + keyCode + "}));";
+        String key;
+        String code;
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_F1: key = "F1"; code = "F1"; break;
+            case KeyEvent.KEYCODE_F2: key = "F2"; code = "F2"; break;
+            case KeyEvent.KEYCODE_F3: key = "F3"; code = "F3"; break;
+            case KeyEvent.KEYCODE_F4: key = "F4"; code = "F4"; break;
+            case KeyEvent.KEYCODE_F5: key = "F5"; code = "F5"; break;
+            case KeyEvent.KEYCODE_F6: key = "F6"; code = "F6"; break;
+            case KeyEvent.KEYCODE_F7: key = "F7"; code = "F7"; break;
+            case KeyEvent.KEYCODE_F8: key = "F8"; code = "F8"; break;
+            case KeyEvent.KEYCODE_F9: key = "F9"; code = "F9"; break;
+            case KeyEvent.KEYCODE_F10: key = "F10"; code = "F10"; break;
+            case KeyEvent.KEYCODE_F11: key = "F11"; code = "F11"; break;
+            case KeyEvent.KEYCODE_F12: key = "F12"; code = "F12"; break;
+            default:
+                key = String.valueOf((char) (new KeyEvent(KeyEvent.ACTION_DOWN, keyCode)).getUnicodeChar());
+                code = "Key" + key.toUpperCase();
+                break;
+        }
+
+        String script = "javascript:(function() {" +
+                "var canvas = document.querySelector('canvas');" +
+                "if (canvas) {" +
+                "   var eventProps = { bubbles: true, cancelable: true, key: '" + key + "', code: '" + code + "', keyCode: " + keyCode + " };" +
+                "   canvas.dispatchEvent(new KeyboardEvent('keydown', eventProps));" +
+                "   canvas.dispatchEvent(new KeyboardEvent('keyup', eventProps));" +
+                "}" +
+                "})()";
         webView.evaluateJavascript(script, null);
     }
 
