@@ -511,6 +511,16 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void confirmDeleteClient(int id) {
+        new AlertDialog.Builder(this)
+                .setCancelable(false)
+                .setTitle("Delete?")
+                .setMessage("Delete " + getClientDisplayName(id) + "? This is permanent.")
+                .setPositiveButton("Yes", (d, w) -> deleteClient(id))
+                .setNegativeButton("No", null)
+                .show();
+    }
+
     private void confirmCloseUtilityClient(int id) {
         new AlertDialog.Builder(this)
                 .setCancelable(false)
