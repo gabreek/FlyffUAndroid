@@ -15,6 +15,7 @@ import android.os.Handler;
 import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.util.SparseArray;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -35,13 +36,16 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.Toast;
 
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -66,6 +70,10 @@ public class MainActivity extends AppCompatActivity {
 
     private LinearLayout linearLayout;
     private FloatingActionButton floatingActionButton;
+    private FrameLayout rootContainer;
+    private final Map<View, WebView> customFabMap = new HashMap<>();
+    private final Map<String, Integer> keyCodeMap = new HashMap<>();
+
 
     private boolean exit = false;
     private final String userAgent = System.getProperty("http.agent");
@@ -82,7 +90,8 @@ public class MainActivity extends AppCompatActivity {
     private final Handler longPressHandler = new Handler();
     private Runnable longPressRunnable;
 
-    /* JS → Android bridges */
+    /* JS 
+ Android bridges */
     public static class LocalStorageInterface {
         private final TinyDB db;
         LocalStorageInterface(Context context, int clientId) {
@@ -115,6 +124,7 @@ public class MainActivity extends AppCompatActivity {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         fullScreenOn();
 
+        rootContainer = findViewById(R.id.root_container);
         linearLayout   = findViewById(R.id.linearLayout);
         floatingActionButton = findViewById(R.id.fab);
         floatingActionButton.setAlpha(0.5f);
@@ -124,6 +134,7 @@ public class MainActivity extends AppCompatActivity {
         screenWidth  = dm.widthPixels;
         screenHeight = dm.heightPixels;
 
+        initializeKeyCodeMap();
         setupFabTouchListener();
 
         configuredClientIds.addAll(getExistingClientIdsFromFileSystem());
@@ -156,54 +167,54 @@ public class MainActivity extends AppCompatActivity {
 
                 /* localStorage override */
                 view.evaluateJavascript(
-                        "(function(){" +
-                        "window.localStorage.setItem=function(k,v){AndroidLocalStorage.setItem(k,v)};" +
-                        "window.localStorage.getItem=function(k){return AndroidLocalStorage.getItem(k)};" +
-                        "window.localStorage.removeItem=function(k){AndroidLocalStorage.removeItem(k)};" +
-                        "window.localStorage.clear=function(){AndroidLocalStorage.clear()};" +
-                        "})()", null);
+                        "(function(){"
+                        + "window.localStorage.setItem=function(k,v){AndroidLocalStorage.setItem(k,v)};"
+                        + "window.localStorage.getItem=function(k){return AndroidLocalStorage.getItem(k)};"
+                        + "window.localStorage.removeItem=function(k){AndroidLocalStorage.removeItem(k)};"
+                        + "window.localStorage.clear=function(){AndroidLocalStorage.clear()};"
+                        + "})()", null);
 
                 /* .bin caching via IndexedDB */
                 view.evaluateJavascript(
-                        "(function(){" +
-                        "const BIN=/\\.bin$/i,IDB_NAME='flyff_bin_cache',STORE='blobs',VER=1;" +
-                        "let db;" +
-                        "const openDb=()=>new Promise((res,rej)=>{" +
-                        "  const r=indexedDB.open(IDB_NAME,VER);" +
-                        "  r.onupgradeneeded=()=>r.result.createObjectStore(STORE);" +
-                        "  r.onsuccess=()=>res(r.result);" +
-                        "  r.onerror=()=>rej(r.error);" +
-                        "});" +
-                        "const key=u=>{try{return new URL(u).origin+new URL(u).pathname}catch{return u.split('?')[0]}};" +
-                        "const get=u=>openDb().then(d=>d.transaction(STORE,'readonly').objectStore(STORE).get(key(u)));" +
-                        "const put=(u,b)=>openDb().then(d=>d.transaction(STORE,'readwrite').objectStore(STORE).put(b,key(u)));" +
-                        "const Native=XMLHttpRequest;" +
-                        "window.XMLHttpRequest=function(){" +
-                        "  const xhr=new Native,open=xhr.open,send=xhr.send;" +
-                        "  xhr.open=function(m,u,...a){" +
-                        "    this._url=u;this._bin=BIN.test(u);" +
-                        "    return open.call(this,m,u,...a);" +
-                        "  };" +
-                        "  xhr.send=function(...a){" +
-                        "    if(!this._bin)return send.apply(this,a);" +
-                        "    const u=this._url;" +
-                        "    get(u).then(blob=>{" +
-                        "      if(blob){" +
-                        "        ['response','responseText','readyState','status','statusText'].forEach(p=>Object.defineProperty(xhr,p,{writable:true}));" +
-                        "        xhr.response=blob;xhr.responseText='';xhr.readyState=4;xhr.status=200;xhr.statusText='OK';" +
-                        "        if(xhr.onreadystatechange)xhr.onreadystatechange();" +
-                        "        if(xhr.onload)xhr.onload();" +
-                        "        return;" +
-                        "      }" +
-                        "      xhr.addEventListener('load',()=>{" +
-                        "        if(xhr.status===200&&xhr.response instanceof Blob)put(u,xhr.response);" +
-                        "      });" +
-                        "      send.apply(xhr,a);" +
-                        "    });" +
-                        "  };" +
-                        "  return xhr;" +
-                        "};" +
-                        "})()", null);
+                        "(function(){"
+                        + "const BIN=/\\.bin$/i,IDB_NAME='flyff_bin_cache',STORE='blobs',VER=1;"
+                        + "let db;"
+                        + "const openDb=()=>new Promise((res,rej)=>{"
+                        + "  const r=indexedDB.open(IDB_NAME,VER);"
+                        + "  r.onupgradeneeded=()=>r.result.createObjectStore(STORE);"
+                        + "  r.onsuccess=()=>res(r.result);"
+                        + "  r.onerror=()=>rej(r.error);"
+                        + "});"
+                        + "const key=u=>{try{return new URL(u).origin+new URL(u).pathname}catch{return u.split('?')[0]}};"
+                        + "const get=u=>openDb().then(d=>d.transaction(STORE,'readonly').objectStore(STORE).get(key(u)));"
+                        + "const put=(u,b)=>openDb().then(d=>d.transaction(STORE,'readwrite').objectStore(STORE).put(b,key(u)));"
+                        + "const Native=XMLHttpRequest;"
+                        + "window.XMLHttpRequest=function(){"
+                        + "  const xhr=new Native,open=xhr.open,send=xhr.send;"
+                        + "  xhr.open=function(m,u,...a){"
+                        + "    this._url=u;this._bin=BIN.test(u);"
+                        + "    return open.call(this,m,u,...a);"
+                        + "  };"
+                        + "  xhr.send=function(...a){"
+                        + "    if(!this._bin)return send.apply(this,a);"
+                        + "    const u=this._url;"
+                        + "    get(u).then(blob=>{"
+                        + "      if(blob){"
+                        + "        ['response','responseText','readyState','status','statusText'].forEach(p=>Object.defineProperty(xhr,p,{writable:true}));"
+                        + "        xhr.response=blob;xhr.responseText='';xhr.readyState=4;xhr.status=200;xhr.statusText='OK';"
+                        + "        if(xhr.onreadystatechange)xhr.onreadystatechange();"
+                        + "        if(xhr.onload)xhr.onload();"
+                        + "        return;"
+                        + "      }"
+                        + "      xhr.addEventListener('load',()=>{"
+                        + "        if(xhr.status===200&&xhr.response instanceof Blob)put(u,xhr.response);"
+                        + "      });"
+                        + "      send.apply(xhr,a);"
+                        + "    });"
+                        + "  };"
+                        + "  return xhr;"
+                        + "};"
+                        + "})()", null);
             }
         });
 
@@ -416,6 +427,8 @@ public class MainActivity extends AppCompatActivity {
         util.add(Menu.NONE, 7000 + Math.abs(MADRIGAL_CLIENT_ID), Menu.NONE, "Madrigal Inside");
         util.add(Menu.NONE, 7000 + Math.abs(FLYFFULATOR_CLIENT_ID), Menu.NONE, "Flyffulator");
 
+        popup.getMenu().addSubMenu(Menu.NONE, 4, Menu.NONE, "Action Buttons");
+
         popup.setOnMenuItemClickListener(item -> {
             int id = -1, itemId = item.getItemId();
             if (itemId > 1000) {
@@ -427,6 +440,7 @@ public class MainActivity extends AppCompatActivity {
                 else if (itemId < 8000) id = -(itemId - 7000);
             }
             if (itemId == 1) createNewClient();
+            else if (itemId == 4) showActionButtonsMenu();
             else if (id != -1) {
                 if (itemId >= 1000 && itemId < 2000) switchToClient(id);
                 else if (itemId >= 2000 && itemId < 3000) confirmKillClient(id);
@@ -571,6 +585,166 @@ public class MainActivity extends AppCompatActivity {
         b.show();
     }
 
+    /* ---------- Action Buttons methods ---------- */
+
+    private void initializeKeyCodeMap() {
+        for (int i = 0; i < 12; i++) {
+            keyCodeMap.put("F" + (i + 1), KeyEvent.KEYCODE_F1 + i);
+        }
+        // Add other keys as needed
+        keyCodeMap.put("A", KeyEvent.KEYCODE_A);
+        keyCodeMap.put("B", KeyEvent.KEYCODE_B);
+        // ... and so on
+    }
+
+    private void showActionButtonsMenu() {
+        final CharSequence[] items = {"Create new AB", "Delete all ABs"};
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Action Button Configuration");
+        builder.setItems(items, (dialog, item) -> {
+            if (items[item].equals("Create new AB")) {
+                showKeyTypeDialog();
+            } else if (items[item].equals("Delete all ABs")) {
+                deleteAllCustomFabs();
+            }
+        });
+        builder.show();
+    }
+
+    private void showKeyTypeDialog() {
+        final CharSequence[] items = {"Function Key", "Custom Key"};
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Select Key Type");
+        builder.setItems(items, (dialog, item) -> {
+            if (items[item].equals("Function Key")) {
+                showFunctionKeyDialog();
+            } else if (items[item].equals("Custom Key")) {
+                showCustomKeyDialog();
+            }
+        });
+        builder.show();
+    }
+
+    private void showFunctionKeyDialog() {
+        final CharSequence[] fKeys = new CharSequence[12];
+        for (int i = 0; i < 12; i++) {
+            fKeys[i] = "F" + (i + 1);
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Select Function Key");
+        builder.setItems(fKeys, (dialog, item) -> {
+            String key = fKeys[item].toString();
+            createCustomFab(key, keyCodeMap.get(key));
+        });
+        builder.show();
+    }
+
+    private void showCustomKeyDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Enter Custom Key");
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        builder.setView(input);
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            String key = input.getText().toString().toUpperCase();
+            if (key.length() == 1) {
+                int keyCode = KeyEvent.keyCodeFromString("KEYCODE_" + key);
+                if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                    createCustomFab(key, keyCode);
+                } else {
+                    Toast.makeText(this, "Invalid key", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "Please enter a single character", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+
+    private void createCustomFab(String keyText, int keyCode) {
+        WebView targetWebView = webViews.get(activeClientId);
+        if (targetWebView == null) {
+            Toast.makeText(this, "No active client to attach the button to.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        ExtendedFloatingActionButton newFab = new ExtendedFloatingActionButton(this);
+        newFab.setText(keyText);
+        newFab.setAlpha(0.7f);
+
+        ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        newFab.setLayoutParams(layoutParams);
+
+        newFab.setOnClickListener(v -> {
+            dispatchKeyEvent(targetWebView, keyCode);
+        });
+
+        rootContainer.addView(newFab);
+        customFabMap.put(newFab, targetWebView);
+
+        makeFabDraggable(newFab);
+
+        Toast.makeText(this, "Action Button for '" + keyText + "' created.", Toast.LENGTH_SHORT).show();
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void makeFabDraggable(ExtendedFloatingActionButton fab) {
+        final float[] xDelta = new float[1];
+        final float[] yDelta = new float[1];
+        final float[] initialRawX = new float[1];
+        final float[] initialRawY = new float[1];
+        final long[] downTime = new long[1];
+
+        fab.setOnTouchListener((v, event) -> {
+            int X = (int) event.getRawX();
+            int Y = (int) event.getRawY();
+            switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                case MotionEvent.ACTION_DOWN:
+                    downTime[0] = event.getDownTime();
+                    initialRawX[0] = event.getRawX();
+                    initialRawY[0] = event.getRawY();
+                    xDelta[0] = X - v.getX();
+                    yDelta[0] = Y - v.getY();
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    long eventDuration = event.getEventTime() - downTime[0];
+                    float dx = Math.abs(event.getRawX() - initialRawX[0]);
+                    float dy = Math.abs(event.getRawY() - initialRawY[0]);
+                    int slop = ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
+                    if (dx < slop && dy < slop && eventDuration < ViewConfiguration.getLongPressTimeout()) {
+                        v.performClick();
+                    }
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    v.setX(X - xDelta[0]);
+                    v.setY(Y - yDelta[0]);
+                    return true;
+            }
+            rootContainer.invalidate();
+            return false;
+        });
+    }
+
+
+    private void deleteAllCustomFabs() {
+        for (View fab : customFabMap.keySet()) {
+            rootContainer.removeView(fab);
+        }
+        customFabMap.clear();
+        Toast.makeText(this, "All custom Action Buttons deleted.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void dispatchKeyEvent(WebView webView, int keyCode) {
+        String script = "document.dispatchEvent(new KeyboardEvent('keydown', {'keyCode':" + keyCode + "}));"
+                        + "document.dispatchEvent(new KeyboardEvent('keyup', {'keyCode':" + keyCode + "}));";
+        webView.evaluateJavascript(script, null);
+    }
+
+
     /* ---------- lifecycle ---------- */
     private void fullScreenOn() {
         WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
@@ -593,6 +767,7 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < webViews.size(); i++) webViews.valueAt(i).destroy();
         webViews.clear();
         layouts.clear();
+        deleteAllCustomFabs();
     }
 
     @Override protected void onSaveInstanceState(@NonNull Bundle out) {
