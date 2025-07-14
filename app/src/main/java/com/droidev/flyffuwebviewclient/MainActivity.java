@@ -420,14 +420,13 @@ public class MainActivity extends AppCompatActivity {
                 } else sm.add(Menu.NONE, 3000 + id, 1, "Open");
                 sm.add(Menu.NONE, 4000 + id, 3, "Rename");
                 sm.add(Menu.NONE, 5000 + id, 4, "Delete");
+                sm.add(Menu.NONE, 6000 + id, 5, "Action Buttons");
             }
         }
         SubMenu util = popup.getMenu().addSubMenu(Menu.NONE, 3, Menu.NONE, "Utils");
         util.add(Menu.NONE, 7000 + Math.abs(WIKI_CLIENT_ID), Menu.NONE, "Flyff Wiki");
         util.add(Menu.NONE, 7000 + Math.abs(MADRIGAL_CLIENT_ID), Menu.NONE, "Madrigal Inside");
         util.add(Menu.NONE, 7000 + Math.abs(FLYFFULATOR_CLIENT_ID), Menu.NONE, "Flyffulator");
-
-        popup.getMenu().addSubMenu(Menu.NONE, 4, Menu.NONE, "Action Buttons");
 
         popup.setOnMenuItemClickListener(item -> {
             int id = -1, itemId = item.getItemId();
@@ -437,16 +436,24 @@ public class MainActivity extends AppCompatActivity {
                 else if (itemId < 4000) id = itemId - 3000;
                 else if (itemId < 5000) id = itemId - 4000;
                 else if (itemId < 6000) id = itemId - 5000;
+                else if (itemId < 7000) id = itemId - 6000;
                 else if (itemId < 8000) id = -(itemId - 7000);
             }
             if (itemId == 1) createNewClient();
-            else if (itemId == 4) showActionButtonsMenu();
             else if (id != -1) {
                 if (itemId >= 1000 && itemId < 2000) switchToClient(id);
                 else if (itemId >= 2000 && itemId < 3000) confirmKillClient(id);
                 else if (itemId >= 3000 && itemId < 4000) openClient(id);
                 else if (itemId >= 4000 && itemId < 5000) showRenameDialog(id);
                 else if (itemId >= 5000 && itemId < 6000) confirmDeleteClient(id);
+                else if (itemId >= 6000 && itemId < 7000) {
+                    if (webViews.get(id) == null) {
+                        openClient(id);
+                    } else {
+                        switchToClient(id);
+                    }
+                    showActionButtonsMenu();
+                }
                 else if (itemId >= 7000 && itemId < 8000) openUtilityClient(id);
             }
             return true;
