@@ -56,13 +56,13 @@ public class MainActivity extends AppCompatActivity {
     private static final String MADRIGAL_URL = "https://madrigalinside.com/";
     private static final String FLYFFULATOR_URL = "https://flyffulator.com/";
 
-    private static final int MAX_CLIENTS = 10; // Let's allow up to 10 slots
+    private static final int MAX_CLIENTS = 10;
     private static final String CLIENT_NAME_KEY = "client_custom_name";
 
-    private SparseArray<WebView> webViews = new SparseArray<>();
-    private SparseArray<FrameLayout> layouts = new SparseArray<>();
+    private final SparseArray<WebView> webViews = new SparseArray<>();
+    private final SparseArray<FrameLayout> layouts = new SparseArray<>();
     private int activeClientId = -1;
-    private Set<Integer> configuredClientIds = new HashSet<>(); // In-memory tracking of configured clients
+    private final Set<Integer> configuredClientIds = new HashSet<>();
 
     private LinearLayout linearLayout;
     private FloatingActionButton floatingActionButton;
@@ -71,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
     private final String userAgent = System.getProperty("http.agent");
     private final String url = "https://universe.flyff.com/play";
 
-    // FAB movement variables
+    /* FAB movement */
     private int _xDelta;
     private int _yDelta;
     private int screenWidth;
@@ -82,774 +82,455 @@ public class MainActivity extends AppCompatActivity {
     private final Handler longPressHandler = new Handler();
     private Runnable longPressRunnable;
 
-    /**
-     * This interface is the bridge between the WebView's JavaScript and Android code.
-     * It intercepts localStorage calls and redirects them to a client-specific TinyDB.
-     */
+    /* JS → Android bridges */
     public static class LocalStorageInterface {
-        private TinyDB db;
-
+        private final TinyDB db;
         LocalStorageInterface(Context context, int clientId) {
             this.db = new TinyDB(context, "client_prefs_" + clientId);
         }
-
-        @JavascriptInterface
-        public void setItem(String key, String value) {
-            db.putString(key, value);
-        }
-
-        @JavascriptInterface
-        public String getItem(String key) {
-            return db.getString(key);
-        }
-
-        @JavascriptInterface
-        public void removeItem(String key) {
-            db.remove(key);
-        }
-
-        @JavascriptInterface
-        public void clear() {
-            db.clear();
-        }
+        @JavascriptInterface public void setItem(String k, String v) { db.putString(k, v); }
+        @JavascriptInterface public String getItem(String k) { return db.getString(k); }
+        @JavascriptInterface public void removeItem(String k) { db.remove(k); }
+        @JavascriptInterface public void clear() { db.clear(); }
     }
 
-    public class WebAppInterface {
-        Context mContext;
-
-        WebAppInterface(Context c) {
-            mContext = c;
-        }
-
-        @JavascriptInterface
-        public void showKeyboard() {
+    public static class WebAppInterface {
+        private final Context mContext;
+        WebAppInterface(Context c) { mContext = c; }
+        @JavascriptInterface public void showKeyboard() {
             InputMethodManager imm = (InputMethodManager) mContext.getSystemService(Context.INPUT_METHOD_SERVICE);
             imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY);
         }
     }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         setTitle("FlyffU Android");
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         fullScreenOn();
 
-        linearLayout = findViewById(R.id.linearLayout);
+        linearLayout   = findViewById(R.id.linearLayout);
         floatingActionButton = findViewById(R.id.fab);
         floatingActionButton.setAlpha(0.5f);
 
-        DisplayMetrics displayMetrics = new DisplayMetrics();
-        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-        screenWidth = displayMetrics.widthPixels;
-        screenHeight = displayMetrics.heightPixels;
+        DisplayMetrics dm = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(dm);
+        screenWidth  = dm.widthPixels;
+        screenHeight = dm.heightPixels;
 
         setupFabTouchListener();
 
-        // Initialize configuredClientIds from existing files on startup
         configuredClientIds.addAll(getExistingClientIdsFromFileSystem());
 
         if (savedInstanceState == null) {
-            // If there are no configs, create a fresh client. Otherwise, open the first available one.
             if (configuredClientIds.isEmpty()) {
                 createNewClient();
             } else {
-                // Open the first configured client if it's not already open
-                int firstClientId = Collections.min(configuredClientIds);
-                if (webViews.get(firstClientId) == null) {
-                    openClient(firstClientId);
-                } else {
-                    switchToClient(firstClientId);
-                }
+                int first = Collections.min(configuredClientIds);
+                if (webViews.get(first) == null) openClient(first);
+                else switchToClient(first);
             }
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private void setupFabTouchListener() {
-        longPressRunnable = () -> floatingActionButton.performLongClick();
-
-        floatingActionButton.setOnTouchListener((view, event) -> {
-            final int X = (int) event.getRawX();
-            final int Y = (int) event.getRawY();
-
-            switch (event.getAction() & MotionEvent.ACTION_MASK) {
-                case MotionEvent.ACTION_DOWN:
-                    downTime = event.getDownTime();
-                    initialRawX = event.getRawX();
-                    initialRawY = event.getRawY();
-                    _xDelta = (int) (X - view.getX());
-                    _yDelta = (int) (Y - view.getY());
-                    longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout());
-                    return true;
-                case MotionEvent.ACTION_UP:
-                    longPressHandler.removeCallbacks(longPressRunnable);
-                    long eventDuration = event.getEventTime() - downTime;
-                    float deltaX = Math.abs(event.getRawX() - initialRawX);
-                    float deltaY = Math.abs(event.getRawY() - initialRawY);
-                    int touchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
-
-                    if (deltaX < touchSlop && deltaY < touchSlop) {
-                        if (eventDuration < ViewConfiguration.getLongPressTimeout()) {
-                            view.performClick();
-                        }
-                    } else {
-                        snapFabToEdge(view);
-                    }
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    int currentTouchSlop = ViewConfiguration.get(view.getContext()).getScaledTouchSlop();
-                    if (Math.abs(event.getRawX() - initialRawX) > currentTouchSlop || Math.abs(event.getRawY() - initialRawY) > currentTouchSlop) {
-                        longPressHandler.removeCallbacks(longPressRunnable);
-                    }
-                    view.setX(X - _xDelta);
-                    view.setY(Y - _yDelta);
-                    return true;
-            }
-            return false;
-        });
-
-        floatingActionButton.setOnClickListener(view -> switchToNextClient());
-        floatingActionButton.setOnLongClickListener(view -> {
-            showClientManagerMenu(view);
-            return true;
-        });
-    }
-
-    private void showClientManagerMenu(View view) {
-        PopupMenu popup = new PopupMenu(MainActivity.this, view);
-        popup.getMenu().add(Menu.NONE, 1, Menu.NONE, "New Client");
-
-        List<Integer> sortedClientIds = new ArrayList<>(configuredClientIds);
-        Collections.sort(sortedClientIds);
-
-        if (!sortedClientIds.isEmpty()) {
-            SubMenu clientsMenu = popup.getMenu().addSubMenu(Menu.NONE, 2, Menu.NONE, "Clients");
-            for (int clientId : sortedClientIds) {
-                String displayName = getClientDisplayName(clientId);
-                SubMenu clientSubMenu = clientsMenu.addSubMenu(Menu.NONE, Menu.NONE, Menu.NONE, displayName);
-
-                boolean isClientOpen = webViews.get(clientId) != null;
-
-                if (isClientOpen) {
-                    clientSubMenu.add(Menu.NONE, 1000 + clientId, 1, "Switch to");
-                    clientSubMenu.add(Menu.NONE, 2000 + clientId, 2, "Kill");
-                } else {
-                    clientSubMenu.add(Menu.NONE, 3000 + clientId, 1, "Open");
-                }
-                clientSubMenu.add(Menu.NONE, 4000 + clientId, 3, "Rename");
-                clientSubMenu.add(Menu.NONE, 5000 + clientId, 4, "Delete"); // New Delete option
-            }
-        }
-
-        // Add Utils Menu
-        SubMenu utilsMenu = popup.getMenu().addSubMenu(Menu.NONE, 3, Menu.NONE, "Utils");
-        utilsMenu.add(Menu.NONE, 7000 + Math.abs(WIKI_CLIENT_ID), Menu.NONE, "Flyff Wiki");
-        utilsMenu.add(Menu.NONE, 7000 + Math.abs(MADRIGAL_CLIENT_ID), Menu.NONE, "Madrigal Inside");
-        utilsMenu.add(Menu.NONE, 7000 + Math.abs(FLYFFULATOR_CLIENT_ID), Menu.NONE, "Flyffulator");
-
-        popup.setOnMenuItemClickListener(item -> {
-            int itemId = item.getItemId();
-            int clientId = -1;
-
-            if (itemId > 1000) {
-                if (itemId < 2000) clientId = itemId - 1000; // Switch
-                else if (itemId < 3000) clientId = itemId - 2000; // Kill
-                else if (itemId < 4000) clientId = itemId - 3000; // Open
-                else if (itemId < 5000) clientId = itemId - 4000; // Rename
-                else if (itemId < 6000) clientId = itemId - 5000; // Delete
-                else if (itemId < 8000) clientId = -(itemId - 7000); // Utils (New range 7000-7999)
-            }
-
-            if (itemId == 1) { // New Client
-                createNewClient();
-                return true;
-            } else if (clientId != -1) {
-                if (itemId >= 1000 && itemId < 2000) { // Switch to
-                    switchToClient(clientId);
-                    return true;
-                } else if (itemId >= 2000 && itemId < 3000) { // Kill
-                    confirmKillClient(clientId);
-                    return true;
-                } else if (itemId >= 3000 && itemId < 4000) { // Open
-                    openClient(clientId);
-                    return true;
-                } else if (itemId >= 4000 && itemId < 5000) { // Rename
-                    showRenameDialog(clientId);
-                    return true;
-                } else if (itemId >= 5000 && itemId < 6000) { // Delete
-                    confirmDeleteClient(clientId);
-                    return true;
-                } else if (itemId >= 7000 && itemId < 8000) { // Utils (New range 7000-7999)
-                    openUtilityClient(clientId);
-                    return true;
-                }
-            }
-            return false;
-        });
-        popup.show();
-    }
-
-    private void showRenameDialog(int clientId) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Rename Client");
-
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setText(getClientDisplayName(clientId));
-        builder.setView(input);
-
-        builder.setPositiveButton("Save", (dialog, which) -> {
-            String newName = input.getText().toString().trim();
-            if (!newName.isEmpty()) {
-                TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
-                db.putString(CLIENT_NAME_KEY, newName);
-                Toast.makeText(this, "Client renamed to " + newName, Toast.LENGTH_SHORT).show();
-                if (activeClientId == clientId) {
-                    setTitle(getClientDisplayName(clientId));
-                }
-            } else {
-                Toast.makeText(this, "Name cannot be empty", Toast.LENGTH_SHORT).show();
-            }
-        });
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
-        builder.show();
-    }
-
-    // This method now only reads from the file system, used for initial population
-    private List<Integer> getExistingClientIdsFromFileSystem() {
-        List<Integer> ids = new ArrayList<>();
-        File prefsDir = new File(getApplicationInfo().dataDir, "shared_prefs");
-        if (prefsDir.exists() && prefsDir.isDirectory()) {
-            Pattern p = Pattern.compile("client_prefs_(\\d+)\\.xml");
-            File[] files = prefsDir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    Matcher m = p.matcher(file.getName());
-                    if (m.matches()) {
-                        try {
-                            int id = Integer.parseInt(m.group(1));
-                            ids.add(id);
-                        } catch (NumberFormatException e) {
-                            // Ignore if parsing fails
-                        }
-                    }
-                }
-            }
-        }
-        return ids;
-    }
-
-    private String getClientDisplayName(int clientId) {
-        if (clientId == WIKI_CLIENT_ID) return "Flyff Wiki";
-        if (clientId == MADRIGAL_CLIENT_ID) return "Madrigal Inside";
-        if (clientId == FLYFFULATOR_CLIENT_ID) return "Flyffulator";
-
-        TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
-        String customName = db.getString(CLIENT_NAME_KEY);
-        String displayName = customName != null && !customName.isEmpty() ? customName : "Client " + clientId;
-        return displayName;
-    }
-
-    private void openUtilityClient(int clientId) {
-        String targetUrl;
-        switch (clientId) {
-            case WIKI_CLIENT_ID:
-                targetUrl = WIKI_URL;
-                break;
-            case MADRIGAL_CLIENT_ID:
-                targetUrl = MADRIGAL_URL;
-                break;
-            case FLYFFULATOR_CLIENT_ID:
-                targetUrl = FLYFFULATOR_URL;
-                break;
-            default:
-                Toast.makeText(this, "Unknown utility client.", Toast.LENGTH_SHORT).show();
-                return;
-        }
-
-        if (webViews.get(clientId) != null) { // Already open
-            if (activeClientId == clientId) {
-                // If it's already the active client, ask to close it
-                confirmCloseUtilityClient(clientId);
-            } else {
-                switchToClient(clientId);
-            }
-            return;
-        }
-
-        if (webViews.size() >= MAX_CLIENTS) {
-            Toast.makeText(this, "Max open clients reached. Cannot open more.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        FrameLayout frameLayout = new FrameLayout(this);
-        frameLayout.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        linearLayout.addView(frameLayout);
-        layouts.put(clientId, frameLayout);
-
-        WebView webView = new CustomWebView(getApplicationContext());
-        createWebViewer(webView, frameLayout, clientId, targetUrl);
-        webViews.put(clientId, webView);
-
-        switchToClient(clientId);
-        floatingActionButton.setVisibility(View.VISIBLE);
-        Toast.makeText(this, getClientDisplayName(clientId) + " opened.", Toast.LENGTH_SHORT).show();
-    }
-
-    private void createNewClient() {
-        List<Integer> openIds = new ArrayList<>();
-        for (int i = 0; i < webViews.size(); i++) {
-            openIds.add(webViews.keyAt(i));
-        }
-
-        // 1. Try to open an existing but currently closed client
-        for (int clientId : configuredClientIds) {
-            if (!openIds.contains(clientId)) {
-                if (webViews.size() >= MAX_CLIENTS) {
-                    Toast.makeText(this, "Max open clients reached. Cannot open more.", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                openClient(clientId);
-                Toast.makeText(this, getClientDisplayName(clientId) + " opened.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-        }
-
-        // 2. If all existing clients are open, or no clients exist, create a new one
-        if (webViews.size() >= MAX_CLIENTS) {
-            Toast.makeText(this, "Max open clients reached. Cannot create new client.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        int newClientId = -1;
-        for (int i = 1; i <= MAX_CLIENTS; i++) {
-            if (!configuredClientIds.contains(i)) { // Check against all configured IDs
-                newClientId = i;
-                break;
-            }
-        }
-
-        if (newClientId == -1) {
-            Toast.makeText(this, "Could not find an available client slot.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        // Add the new client ID to our in-memory set immediately
-        configuredClientIds.add(newClientId);
-
-        openClient(newClientId);
-        Toast.makeText(this, getClientDisplayName(newClientId) + " created.", Toast.LENGTH_SHORT).show();
-    }
-
-    private void openClient(int clientId) {
-        if (webViews.get(clientId) != null) { // Already open
-            switchToClient(clientId);
-            return;
-        }
-
-        if (webViews.size() >= MAX_CLIENTS) {
-            Toast.makeText(this, "Max open clients reached", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        FrameLayout frameLayout = new FrameLayout(this);
-        frameLayout.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        linearLayout.addView(frameLayout);
-        layouts.put(clientId, frameLayout);
-
-        WebView webView = new CustomWebView(getApplicationContext());
-        createWebViewer(webView, frameLayout, clientId, url);
-        webViews.put(clientId, webView);
-
-        switchToClient(clientId);
-        floatingActionButton.setVisibility(View.VISIBLE);
-    }
-
-    private void switchToNextClient() {
-        if (webViews.size() > 1) {
-            List<Integer> clientIds = new ArrayList<>();
-            for (int i = 0; i < webViews.size(); i++) {
-                clientIds.add(webViews.keyAt(i));
-            }
-            Collections.sort(clientIds);
-
-            int currentIndexInList = clientIds.indexOf(activeClientId);
-            int nextIndexInList = (currentIndexInList + 1) % clientIds.size();
-            int nextClientId = clientIds.get(nextIndexInList);
-
-            switchToClient(nextClientId);
-        } else {
-            // Only one or no clients open. No switch needed.
-        }
-    }
-
-    private void switchToClient(int clientId) {
-        if (layouts.get(clientId) == null) {
-            // This might happen if we try to switch to a client that was just killed
-            // but the switch command was already in-flight.
-            if (webViews.size() > 0) {
-                int fallbackClientId = webViews.keyAt(0);
-                switchToClient(fallbackClientId);
-            } else {
-                activeClientId = -1;
-                setTitle("FlyffU Android");
-                floatingActionButton.setVisibility(View.GONE);
-            }
-            return;
-        }
-
-        for (int i = 0; i < layouts.size(); i++) {
-            int key = layouts.keyAt(i);
-            layouts.get(key).setVisibility(key == clientId ? View.VISIBLE : View.GONE);
-        }
-        activeClientId = clientId;
-        setTitle(getClientDisplayName(activeClientId));
-
-        // Request focus for the active WebView and hide keyboard if visible
-        WebView activeWebView = webViews.get(activeClientId);
-        if (activeWebView != null) {
-            activeWebView.requestFocus();
-            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) {
-                imm.hideSoftInputFromWindow(activeWebView.getWindowToken(), 0);
-            }
-        }
-    }
-
-    private void confirmKillClient(int clientId) {
-        if (webViews.get(clientId) == null) return;
-
-        new AlertDialog.Builder(MainActivity.this)
-                .setCancelable(false)
-                .setTitle("Are you sure?")
-                .setMessage("Do you want to kill " + getClientDisplayName(clientId) + "?")
-                .setPositiveButton("Yes", (dialog, which) -> killClient(clientId))
-                .setNegativeButton("No", null)
-                .show();
-    }
-
-    private void killClient(int clientId) {
-        if (webViews.get(clientId) == null) return;
-
-        WebView webViewToKill = webViews.get(clientId);
-        FrameLayout layoutToKill = layouts.get(clientId);
-
-        layoutToKill.removeAllViews();
-        webViewToKill.destroy();
-        linearLayout.removeView(layoutToKill);
-
-        webViews.remove(clientId);
-        layouts.remove(clientId);
-
-        Toast.makeText(this, getClientDisplayName(clientId) + " killed.", Toast.LENGTH_SHORT).show();
-
-        if (webViews.size() == 0) {
-            activeClientId = -1;
-            setTitle("FlyffU Android");
-            floatingActionButton.setVisibility(View.GONE);
-        } else {
-            if (activeClientId == clientId) {
-                activeClientId = webViews.keyAt(0);
-                switchToClient(activeClientId);
-            }
-        }
-    }
-
+    /* ---------- WebView creation with .bin caching ---------- */
     @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
     private void createWebViewer(WebView webView, FrameLayout frameLayout, int clientId, String initialUrl) {
         webView.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // This is the magic: inject our Java object into the WebView's JS context
         webView.addJavascriptInterface(new LocalStorageInterface(this, clientId), "AndroidLocalStorage");
         webView.addJavascriptInterface(new WebAppInterface(this), "FlyffUAndroid");
 
+        webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
+            @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                // This JS code replaces the browser's localStorage with our Android-backed version
-                view.evaluateJavascript("javascript: (function() { " +
-                        "window.localStorage.setItem = function(key, value) { AndroidLocalStorage.setItem(key, value); }; " +
-                        "window.localStorage.getItem = function(key) { return AndroidLocalStorage.getItem(key); }; " +
-                        "window.localStorage.removeItem = function(key) { AndroidLocalStorage.removeItem(key); }; " +
-                        "window.localStorage.clear = function() { AndroidLocalStorage.clear(); }; " +
-                        // Detectar foco em inputs e textareas
-                        "var inputs = document.getElementsByTagName('input');" +
-                        "var textareas = document.getElementsByTagName('textarea');" +
-                        "var elements = Array.from(inputs).concat(Array.from(textareas));" +
-                        "for (var i = 0; i < elements.length; i++) {" +
-                        "  elements[i].addEventListener('focus', function() {" +
-                        "    window.FlyffUAndroid.showKeyboard();" +
-                        "  });" +
-                        "}" +
-                        // Detectar cliques no canvas
-                        "var canvas = document.getElementsByTagName('canvas')[0];" +
-                        "if (canvas) {" +
-                        "  canvas.addEventListener('click', function() {" +
-                        "    var input = document.createElement('input');" +
-                        "    input.type = 'text';" +
-                        "    input.style.position = 'absolute';" +
-                        "    input.style.opacity = '0';" +
-                        "    document.body.appendChild(input);" +
-                        "    input.focus();" +
-                        "    window.FlyffUAndroid.showKeyboard();" +
-                        "  });" +
-                        "}" +
+
+                /* localStorage override */
+                view.evaluateJavascript(
+                        "(function(){" +
+                        "window.localStorage.setItem=function(k,v){AndroidLocalStorage.setItem(k,v)};" +
+                        "window.localStorage.getItem=function(k){return AndroidLocalStorage.getItem(k)};" +
+                        "window.localStorage.removeItem=function(k){AndroidLocalStorage.removeItem(k)};" +
+                        "window.localStorage.clear=function(){AndroidLocalStorage.clear()};" +
+                        "})()", null);
+
+                /* .bin caching via IndexedDB */
+                view.evaluateJavascript(
+                        "(function(){" +
+                        "const BIN=/\\.bin$/i,IDB_NAME='flyff_bin_cache',STORE='blobs',VER=1;" +
+                        "let db;" +
+                        "const openDb=()=>new Promise((res,rej)=>{" +
+                        "  const r=indexedDB.open(IDB_NAME,VER);" +
+                        "  r.onupgradeneeded=()=>r.result.createObjectStore(STORE);" +
+                        "  r.onsuccess=()=>res(r.result);" +
+                        "  r.onerror=()=>rej(r.error);" +
+                        "});" +
+                        "const key=u=>{try{return new URL(u).origin+new URL(u).pathname}catch{return u.split('?')[0]}};" +
+                        "const get=u=>openDb().then(d=>d.transaction(STORE,'readonly').objectStore(STORE).get(key(u)));" +
+                        "const put=(u,b)=>openDb().then(d=>d.transaction(STORE,'readwrite').objectStore(STORE).put(b,key(u)));" +
+                        "const Native=XMLHttpRequest;" +
+                        "window.XMLHttpRequest=function(){" +
+                        "  const xhr=new Native,open=xhr.open,send=xhr.send;" +
+                        "  xhr.open=function(m,u,...a){" +
+                        "    this._url=u;this._bin=BIN.test(u);" +
+                        "    return open.call(this,m,u,...a);" +
+                        "  };" +
+                        "  xhr.send=function(...a){" +
+                        "    if(!this._bin)return send.apply(this,a);" +
+                        "    const u=this._url;" +
+                        "    get(u).then(blob=>{" +
+                        "      if(blob){" +
+                        "        ['response','responseText','readyState','status','statusText'].forEach(p=>Object.defineProperty(xhr,p,{writable:true}));" +
+                        "        xhr.response=blob;xhr.responseText='';xhr.readyState=4;xhr.status=200;xhr.statusText='OK';" +
+                        "        if(xhr.onreadystatechange)xhr.onreadystatechange();" +
+                        "        if(xhr.onload)xhr.onload();" +
+                        "        return;" +
+                        "      }" +
+                        "      xhr.addEventListener('load',()=>{" +
+                        "        if(xhr.status===200&&xhr.response instanceof Blob)put(u,xhr.response);" +
+                        "      });" +
+                        "      send.apply(xhr,a);" +
+                        "    });" +
+                        "  };" +
+                        "  return xhr;" +
+                        "};" +
                         "})()", null);
             }
         });
 
-        // Add WebChromeClient to handle UI-related events, including keyboard
-        webView.setWebChromeClient(new WebChromeClient());
-        String binCacheJs = "(function() {" +
-                                    "  const BIN_REGEXP = /\.bin$/i;" +
-                                    "  const CACHE_NAME = 'flyff-bin-v1';" +
-                                    "  const IDB_NAME   = 'flyff_bin_cache';" +
-                                    "  const IDB_STORE  = 'blobs';" +
-                                    "  const IDB_VER    = 1;" +
-                                    "" +
-                                    "  /* ---------- IndexedDB helper ---------- */" +
-                                    "  let dbPromise = new Promise((resolve, reject) => {" +
-                                    "    const req = indexedDB.open(IDB_NAME, IDB_VER);" +
-                                    "    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);" +
-                                    "    req.onsuccess = () => resolve(req.result);" +
-                                    "    req.onerror   = () => reject(req.error);" +
-                                    "  });" +
-                                    "" +
-                                    "  /* ---------- key normalisation ---------- */" +
-                                    "  function cacheKey(url) {" +
-                                    "    // keep only protocol://host/path; drop query & hash" +
-                                    "    try {" +
-                                    "      const u = new URL(url);" +
-                                    "      return u.origin + u.pathname;" +
-                                    "    } catch (_) {" +
-                                    "      return url.split('?')[0];   // fallback for IE11/old WebView" +
-                                    "    }" +
-                                    "  }" +
-                                    "" +
-                                    "  async function getBinFromIDB(url) {" +
-                                    "    const db = await dbPromise;" +
-                                    "    return db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(cacheKey(url));" +
-                                    "  }" +
-                                    "" +
-                                    "  async function putBinToIDB(url, blob) {" +
-                                    "    const db = await dbPromise;" +
-                                    "    return db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(blob, cacheKey(url));" +
-                                    "  }" +
-                                    "" +
-                                    "  /* ---------- XHR hook ---------- */" +
-                                    "  const NativeXHR = window.XMLHttpRequest;" +
-                                    "  function PatchedXHR() {" +
-                                    "    const xhr = new NativeXHR();" +
-                                    "    const nativeOpen = xhr.open;" +
-                                    "    const nativeSend = xhr.send;" +
-                                    "" +
-                                    "    xhr.open = function(method, url, ...rest) {" +
-                                    "      this._url = url;" +
-                                    "      if (BIN_REGEXP.test(url)) {" +
-                                    "        this._isBin = true;" +
-                                    "      }" +
-                                    "      return nativeOpen.call(this, method, url, ...rest);" +
-                                    "    };" +
-                                    "" +
-                                    "    xhr.send = function(...args) {" +
-                                    "      if (!this._isBin) return nativeSend.apply(this, args);" +
-                                    "" +
-                                    "      const url = this._url;" +
-                                    "      getBinFromIDB(url).then(blob => {" +
-                                    "        if (blob) {" +
-                                    "          // Cache hit: return instantly" +
-                                    "          Object.defineProperty(this, 'response', {writable: true});" +
-                                    "          Object.defineProperty(this, 'responseText', {writable: true});" +
-                                    "          Object.defineProperty(this, 'readyState', {writable: true});" +
-                                    "          Object.defineProperty(this, 'status', {writable: true});" +
-                                    "          Object.defineProperty(this, 'statusText', {writable: true});" +
-                                    "" +
-                                    "          this.response     = blob;" +
-                                    "          this.responseText = '';" +
-                                    "          this.readyState   = 4;" +
-                                    "          this.status       = 200;" +
-                                    "          this.statusText   = 'OK';" +
-                                    "" +
-                                    "          if (this.onreadystatechange) this.onreadystatechange();" +
-                                    "          if (this.onload) this.onload();" +
-                                    "          return;" +
-                                    "        }" +
-                                    "" +
-                                    "        // Cache miss: use native XHR, then store" +
-                                    "        xhr.addEventListener('load', () => {" +
-                                    "          if (xhr.status === 200 && xhr.response instanceof Blob) {" +
-                                    "            putBinToIDB(url, xhr.response);" +
-                                    "          }" +
-                                    "        });" +
-                                    "        nativeSend.apply(this, args);" +
-                                    "      });" +
-                                    "    };" +
-                                    "    return xhr;" +
-                                    "  }" +
-                                    "" +
-                                    "  Object.defineProperty(window, 'XMLHttpRequest', {value: PatchedXHR, writable: false});" +
-                                    "})();";
-                webView.evaluateJavascript(binCacheJs, null);
-        
-        WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true); // Keep this true, our JS override handles it
-        webSettings.setAppCacheEnabled(true);
-        webSettings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
-        webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
-        webSettings.setUseWideViewPort(true);
-        webSettings.setLoadWithOverviewMode(true);
-        webSettings.setUserAgentString(userAgent);
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null); // Corrected: webView.setLayerType
-        webSettings.setSupportZoom(true);
-        webSettings.setBuiltInZoomControls(true);
-        webSettings.setDisplayZoomControls(false);
+        WebSettings s = webView.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAppCacheEnabled(true);
+        s.setAppCachePath(getCacheDir().getAbsolutePath());
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setUserAgentString(userAgent);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        s.setSupportZoom(true);
+        s.setBuiltInZoomControls(true);
+        s.setDisplayZoomControls(false);
 
         frameLayout.addView(webView);
-        webView.requestFocus(); // Request focus for the WebView
-
+        webView.requestFocus();
         webView.loadUrl(initialUrl);
+    }
+
+    /* ---------- rest of the file unchanged ---------- */
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void setupFabTouchListener() {
+        longPressRunnable = () -> floatingActionButton.performLongClick();
+        floatingActionButton.setOnTouchListener((v, e) -> {
+            int X = (int) e.getRawX(), Y = (int) e.getRawY();
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downTime = e.getDownTime();
+                    initialRawX = e.getRawX();
+                    initialRawY = e.getRawY();
+                    _xDelta = X - (int) v.getX();
+                    _yDelta = Y - (int) v.getY();
+                    longPressHandler.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout());
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    longPressHandler.removeCallbacks(longPressRunnable);
+                    long dur = e.getEventTime() - downTime;
+                    float dx = Math.abs(e.getRawX() - initialRawX);
+                    float dy = Math.abs(e.getRawY() - initialRawY);
+                    int slop = ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
+                    if (dx < slop && dy < slop && dur < ViewConfiguration.getLongPressTimeout())
+                        v.performClick();
+                    else snapFabToEdge(v);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(e.getRawX() - initialRawX) > ViewConfiguration.get(v.getContext()).getScaledTouchSlop()
+                            || Math.abs(e.getRawY() - initialRawY) > ViewConfiguration.get(v.getContext()).getScaledTouchSlop())
+                        longPressHandler.removeCallbacks(longPressRunnable);
+                    v.setX(X - _xDelta);
+                    v.setY(Y - _yDelta);
+                    return true;
             }
+            return false;
         });
-
-        // Add WebChromeClient to handle UI-related events, including keyboard
-        webView.setWebChromeClient(new WebChromeClient());
-        String binCacheJs = "(function() {" +
-                                    "  const BIN_REGEXP = /\\.bin$/i;" +
-                                    "  const CACHE_NAME = 'flyff-bin-v1';" +
-                                    "  const IDB_NAME   = 'flyff_bin_cache';" +
-                                    "  const IDB_STORE  = 'blobs';" +
-                                    "  const IDB_VER    = 1;" +
-                                    "" +
-                                    "  /* ---------- IndexedDB helper ---------- */" +
-                                    "  let dbPromise = new Promise((resolve, reject) => {" +
-                                    "    const req = indexedDB.open(IDB_NAME, IDB_VER);" +
-                                    "    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);" +
-                                    "    req.onsuccess = () => resolve(req.result);" +
-                                    "    req.onerror   = () => reject(req.error);" +
-                                    "  });" +
-                                    "" +
-                                    "  /* ---------- key normalisation ---------- */" +
-                                    "  function cacheKey(url) {" +
-                                    "    // keep only protocol://host/path; drop query & hash" +
-                                    "    try {" +
-                                    "      const u = new URL(url);" +
-                                    "      return u.origin + u.pathname;" +
-                                    "    } catch (_) {" +
-                                    "      return url.split('?')[0];   // fallback for IE11/old WebView" +
-                                    "    }" +
-                                    "  }" +
-                                    "" +
-                                    "  async function getBinFromIDB(url) {" +
-                                    "    const db = await dbPromise;" +
-                                    "    return db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(cacheKey(url));" +
-                                    "  }" +
-                                    "" +
-                                    "  async function putBinToIDB(url, blob) {" +
-                                    "    const db = await dbPromise;" +
-                                    "    return db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(blob, cacheKey(url));" +
-                                    "  }" +
-                                    "" +
-                                    "  /* ---------- XHR hook ---------- */" +
-                                    "  const NativeXHR = window.XMLHttpRequest;" +
-                                    "  function PatchedXHR() {" +
-                                    "    const xhr = new NativeXHR();" +
-                                    "    const nativeOpen = xhr.open;" +
-                                    "    const nativeSend = xhr.send;" +
-                                    "" +
-                                    "    xhr.open = function(method, url, ...rest) {" +
-                                    "      this._url = url;" +
-                                    "      if (BIN_REGEXP.test(url)) {" +
-                                    "        this._isBin = true;" +
-                                    "      }" +
-                                    "      return nativeOpen.call(this, method, url, ...rest);" +
-                                    "    };" +
-                                    "" +
-                                    "    xhr.send = function(...args) {" +
-                                    "      if (!this._isBin) return nativeSend.apply(this, args);" +
-                                    "" +
-                                    "      const url = this._url;" +
-                                    "      getBinFromIDB(url).then(blob => {" +
-                                    "        if (blob) {" +
-                                    "          // Cache hit: return instantly" +
-                                    "          Object.defineProperty(this, 'response', {writable: true});" +
-                                    "          Object.defineProperty(this, 'responseText', {writable: true});" +
-                                    "          Object.defineProperty(this, 'readyState', {writable: true});" +
-                                    "          Object.defineProperty(this, 'status', {writable: true});" +
-                                    "          Object.defineProperty(this, 'statusText', {writable: true});" +
-                                    "" +
-                                    "          this.response     = blob;" +
-                                    "          this.responseText = '';" +
-                                    "          this.readyState   = 4;" +
-                                    "          this.status       = 200;" +
-                                    "          this.statusText   = 'OK';" +
-                                    "" +
-                                    "          if (this.onreadystatechange) this.onreadystatechange();" +
-                                    "          if (this.onload) this.onload();" +
-                                    "          return;" +
-                                    "        }" +
-                                    "" +
-                                    "        // Cache miss: use native XHR, then store" +
-                                    "        xhr.addEventListener('load', () => {" +
-                                    "          if (xhr.status === 200 && xhr.response instanceof Blob) {" +
-                                    "            putBinToIDB(url, xhr.response);" +
-                                    "          }" +
-                                    "        });" +
-                                    "        nativeSend.apply(this, args);" +
-                                    "      });" +
-                                    "    };" +
-                                    "    return xhr;" +
-                                    "  }" +
-                                    "" +
-                                    "  Object.defineProperty(window, 'XMLHttpRequest', {value: PatchedXHR, writable: false});" +
-                                    "})();";
-                webView.evaluateJavascript(binCacheJs, null);
+        floatingActionButton.setOnClickListener(v -> switchToNextClient());
+        floatingActionButton.setOnLongClickListener(v -> {
+            showClientManagerMenu(v);
+            return true;
+        });
     }
 
-    private void createWebViewer(WebView webView, FrameLayout frameLayout, int clientId) {
-        createWebViewer(webView, frameLayout, clientId, url);
+    private void snapFabToEdge(View v) {
+        int w = v.getWidth();
+        float x = v.getX();
+        if (x < -w / 2f) x = -w / 2f;
+        if (x > screenWidth - w / 2f) x = screenWidth - w / 2f;
+        ObjectAnimator.ofFloat(v, "x", x).setDuration(200).start();
     }
 
-    private void confirmCloseUtilityClient(int clientId) {
-        new AlertDialog.Builder(MainActivity.this)
+    /* ---------- client helper methods ---------- */
+
+    private void openClient(int id) {
+        if (webViews.get(id) != null) { switchToClient(id); return; }
+        if (webViews.size() >= MAX_CLIENTS) {
+            Toast.makeText(this, "Max clients open", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        FrameLayout fl = new FrameLayout(this);
+        fl.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        linearLayout.addView(fl);
+        layouts.put(id, fl);
+
+        WebView w = new CustomWebView(getApplicationContext());
+        createWebViewer(w, fl, id, url);
+        webViews.put(id, w);
+        switchToClient(id);
+        floatingActionButton.setVisibility(View.VISIBLE);
+    }
+
+    private void switchToClient(int id) {
+        if (layouts.get(id) == null) {
+            if (webViews.size() > 0) switchToClient(webViews.keyAt(0));
+            else {
+                activeClientId = -1;
+                setTitle("FlyffU Android");
+                floatingActionButton.setVisibility(View.GONE);
+            }
+            return;
+        }
+        for (int i = 0; i < layouts.size(); i++) {
+            int k = layouts.keyAt(i);
+            layouts.get(k).setVisibility(k == id ? View.VISIBLE : View.GONE);
+        }
+        activeClientId = id;
+        setTitle(getClientDisplayName(id));
+        WebView w = webViews.get(id);
+        if (w != null) {
+            w.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(w.getWindowToken(), 0);
+        }
+    }
+
+    private void switchToNextClient() {
+        if (webViews.size() > 1) {
+            List<Integer> ids = new ArrayList<>();
+            for (int i = 0; i < webViews.size(); i++) ids.add(webViews.keyAt(i));
+            Collections.sort(ids);
+            int idx = (ids.indexOf(activeClientId) + 1) % ids.size();
+            switchToClient(ids.get(idx));
+        }
+    }
+
+    private void killClient(int id) {
+        if (webViews.get(id) == null) return;
+        WebView w = webViews.get(id);
+        FrameLayout f = layouts.get(id);
+        f.removeAllViews();
+        w.destroy();
+        linearLayout.removeView(f);
+        webViews.remove(id);
+        layouts.remove(id);
+        Toast.makeText(this, getClientDisplayName(id) + " killed", Toast.LENGTH_SHORT).show();
+        if (webViews.size() == 0) {
+            activeClientId = -1;
+            setTitle("FlyffU Android");
+            floatingActionButton.setVisibility(View.GONE);
+        } else if (activeClientId == id) {
+            activeClientId = webViews.keyAt(0);
+            switchToClient(activeClientId);
+        }
+    }
+
+    private void deleteClient(int id) {
+        if (webViews.get(id) != null) killClient(id);
+        configuredClientIds.remove(id);
+        TinyDB db = new TinyDB(this, "client_prefs_" + id);
+        db.clear();
+        File f = new File(getApplicationInfo().dataDir, "shared_prefs/client_prefs_" + id + ".xml");
+        if (f.exists()) f.delete();
+        Toast.makeText(this, "Client " + id + " deleted", Toast.LENGTH_SHORT).show();
+        if (configuredClientIds.isEmpty()) createNewClient();
+    }
+
+    private List<Integer> getExistingClientIdsFromFileSystem() {
+        List<Integer> ids = new ArrayList<>();
+        File dir = new File(getApplicationInfo().dataDir, "shared_prefs");
+        if (dir.exists() && dir.isDirectory()) {
+            Pattern p = Pattern.compile("client_prefs_(\\d+)\\.xml");
+            File[] fs = dir.listFiles();
+            if (fs != null)
+                for (File f : fs) {
+                    Matcher m = p.matcher(f.getName());
+                    if (m.matches()) try {
+                        ids.add(Integer.parseInt(m.group(1)));
+                    } catch (NumberFormatException ignore) {}
+                }
+        }
+        return ids;
+    }
+
+    private String getClientDisplayName(int id) {
+        if (id == WIKI_CLIENT_ID) return "Flyff Wiki";
+        if (id == MADRIGAL_CLIENT_ID) return "Madrigal Inside";
+        if (id == FLYFFULATOR_CLIENT_ID) return "Flyffulator";
+        TinyDB db = new TinyDB(this, "client_prefs_" + id);
+        String custom = db.getString(CLIENT_NAME_KEY);
+        return (custom != null && !custom.isEmpty()) ? custom : "Client " + id;
+    }
+
+    /* ---------- FAB long-press menu ---------- */
+    private void showClientManagerMenu(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        popup.getMenu().add(Menu.NONE, 1, Menu.NONE, "New Client");
+
+        List<Integer> sorted = new ArrayList<>(configuredClientIds);
+        Collections.sort(sorted);
+        if (!sorted.isEmpty()) {
+            SubMenu sub = popup.getMenu().addSubMenu(Menu.NONE, 2, Menu.NONE, "Clients");
+            for (int id : sorted) {
+                SubMenu sm = sub.addSubMenu(getClientDisplayName(id));
+                boolean open = webViews.get(id) != null;
+                if (open) {
+                    sm.add(Menu.NONE, 1000 + id, 1, "Switch");
+                    sm.add(Menu.NONE, 2000 + id, 2, "Kill");
+                } else sm.add(Menu.NONE, 3000 + id, 1, "Open");
+                sm.add(Menu.NONE, 4000 + id, 3, "Rename");
+                sm.add(Menu.NONE, 5000 + id, 4, "Delete");
+            }
+        }
+        SubMenu util = popup.getMenu().addSubMenu(Menu.NONE, 3, Menu.NONE, "Utils");
+        util.add(Menu.NONE, 7000 + Math.abs(WIKI_CLIENT_ID), Menu.NONE, "Flyff Wiki");
+        util.add(Menu.NONE, 7000 + Math.abs(MADRIGAL_CLIENT_ID), Menu.NONE, "Madrigal Inside");
+        util.add(Menu.NONE, 7000 + Math.abs(FLYFFULATOR_CLIENT_ID), Menu.NONE, "Flyffulator");
+
+        popup.setOnMenuItemClickListener(item -> {
+            int id = -1, itemId = item.getItemId();
+            if (itemId > 1000) {
+                if (itemId < 2000) id = itemId - 1000;
+                else if (itemId < 3000) id = itemId - 2000;
+                else if (itemId < 4000) id = itemId - 3000;
+                else if (itemId < 5000) id = itemId - 4000;
+                else if (itemId < 6000) id = itemId - 5000;
+                else if (itemId < 8000) id = -(itemId - 7000);
+            }
+            if (itemId == 1) createNewClient();
+            else if (id != -1) {
+                if (itemId >= 1000 && itemId < 2000) switchToClient(id);
+                else if (itemId >= 2000 && itemId < 3000) confirmKillClient(id);
+                else if (itemId >= 3000 && itemId < 4000) openClient(id);
+                else if (itemId >= 4000 && itemId < 5000) showRenameDialog(id);
+                else if (itemId >= 5000 && itemId < 6000) confirmDeleteClient(id);
+                else if (itemId >= 7000 && itemId < 8000) openUtilityClient(id);
+            }
+            return true;
+        });
+        popup.show();
+    }
+
+    private void createNewClient() {
+        List<Integer> open = new ArrayList<>();
+        for (int i = 0; i < webViews.size(); i++) open.add(webViews.keyAt(i));
+        for (int id : configuredClientIds) {
+            if (!open.contains(id)) {
+                if (webViews.size() >= MAX_CLIENTS) {
+                    Toast.makeText(this, "Max open clients reached", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                openClient(id);
+                Toast.makeText(this, getClientDisplayName(id) + " opened", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+        if (webViews.size() >= MAX_CLIENTS) {
+            Toast.makeText(this, "Max clients reached", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int newId = 1;
+        while (configuredClientIds.contains(newId) && newId <= MAX_CLIENTS) newId++;
+        if (newId > MAX_CLIENTS) {
+            Toast.makeText(this, "No free slot", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        configuredClientIds.add(newId);
+        openClient(newId);
+        Toast.makeText(this, "Client " + newId + " created", Toast.LENGTH_SHORT).show();
+    }
+
+    private void openUtilityClient(int id) {
+        String u;
+        switch (id) {
+            case WIKI_CLIENT_ID: u = WIKI_URL; break;
+            case MADRIGAL_CLIENT_ID: u = MADRIGAL_URL; break;
+            case FLYFFULATOR_CLIENT_ID: u = FLYFFULATOR_URL; break;
+            default: return;
+        }
+        if (webViews.get(id) != null) {
+            if (activeClientId == id) confirmCloseUtilityClient(id);
+            else switchToClient(id);
+            return;
+        }
+        if (webViews.size() >= MAX_CLIENTS) {
+            Toast.makeText(this, "Max clients reached", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        FrameLayout fl = new FrameLayout(this);
+        fl.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        linearLayout.addView(fl);
+        layouts.put(id, fl);
+
+        WebView w = new CustomWebView(getApplicationContext());
+        createWebViewer(w, fl, id, u);
+        webViews.put(id, w);
+        switchToClient(id);
+        floatingActionButton.setVisibility(View.VISIBLE);
+        Toast.makeText(this, getClientDisplayName(id) + " opened", Toast.LENGTH_SHORT).show();
+    }
+
+    private void confirmKillClient(int id) {
+        new AlertDialog.Builder(this)
                 .setCancelable(false)
-                .setTitle("Close Utility?")
-                .setMessage("Do you want to close " + getClientDisplayName(clientId) + "?")
-                .setPositiveButton("Yes", (dialog, which) -> closeUtilityClient(clientId))
+                .setTitle("Kill?")
+                .setMessage("Kill " + getClientDisplayName(id) + "?")
+                .setPositiveButton("Yes", (d, w) -> killClient(id))
                 .setNegativeButton("No", null)
                 .show();
     }
 
-    private void closeUtilityClient(int clientId) {
-        if (webViews.get(clientId) == null) return;
+    private void confirmCloseUtilityClient(int id) {
+        new AlertDialog.Builder(this)
+                .setCancelable(false)
+                .setTitle("Close?")
+                .setMessage("Close " + getClientDisplayName(id) + "?")
+                .setPositiveButton("Yes", (d, w) -> closeUtilityClient(id))
+                .setNegativeButton("No", null)
+                .show();
+    }
 
-        WebView webViewToClose = webViews.get(clientId);
-        FrameLayout layoutToClose = layouts.get(clientId);
-
-        layoutToClose.removeAllViews();
-        webViewToClose.destroy();
-        linearLayout.removeView(layoutToClose);
-
-        webViews.remove(clientId);
-        layouts.remove(clientId);
-
-        Toast.makeText(this, getClientDisplayName(clientId) + " closed.", Toast.LENGTH_SHORT).show();
-
+    private void closeUtilityClient(int id) {
+        if (webViews.get(id) == null) return;
+        WebView w = webViews.get(id);
+        FrameLayout f = layouts.get(id);
+        f.removeAllViews();
+        w.destroy();
+        linearLayout.removeView(f);
+        webViews.remove(id);
+        layouts.remove(id);
+        Toast.makeText(this, getClientDisplayName(id) + " closed", Toast.LENGTH_SHORT).show();
         if (webViews.size() == 0) {
             activeClientId = -1;
             setTitle("FlyffU Android");
@@ -860,100 +541,58 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void snapFabToEdge(View view) {
-        int fabWidth = view.getWidth();
-        float currentX = view.getX();
-        if (currentX < (float) -fabWidth / 2) {
-            currentX = (float) -fabWidth / 2;
-        } else if (currentX > screenWidth - (float) fabWidth / 2) {
-            currentX = screenWidth - (float) fabWidth / 2;
-        }
-        ObjectAnimator.ofFloat(view, "x", currentX).setDuration(200).start();
+    private void showRenameDialog(int id) {
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle("Rename Client");
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setText(getClientDisplayName(id));
+        b.setView(input);
+        b.setPositiveButton("Save", (d, w) -> {
+            String n = input.getText().toString().trim();
+            if (!n.isEmpty()) {
+                TinyDB db = new TinyDB(this, "client_prefs_" + id);
+                db.putString(CLIENT_NAME_KEY, n);
+                Toast.makeText(this, "Renamed to " + n, Toast.LENGTH_SHORT).show();
+                if (activeClientId == id) setTitle(n);
+            } else Toast.makeText(this, "Empty name", Toast.LENGTH_SHORT).show();
+        });
+        b.setNegativeButton("Cancel", null);
+        b.show();
     }
 
-    @Override
-    public void onBackPressed() {
-        if (exit) {
-            finish();
+    /* ---------- lifecycle ---------- */
+    private void fullScreenOn() {
+        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (c != null) {
+            c.hide(WindowInsetsCompat.Type.systemBars());
+            c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
         }
-        else {
-            Toast.makeText(this, "Press Back again to Exit.", Toast.LENGTH_SHORT).show();
-            exit = true;
-            new Handler().postDelayed(() -> exit = false, 3 * 1000);
-        }
+        if (getSupportActionBar() != null) getSupportActionBar().hide();
     }
 
-    private void confirmDeleteClient(int clientId) {
-        new AlertDialog.Builder(MainActivity.this)
-                .setCancelable(false)
-                .setTitle("Confirm Deletion")
-                .setMessage("Are you sure you want to delete " + getClientDisplayName(clientId) + "? This will remove all its data.")
-                .setPositiveButton("Yes", (dialog, which) -> deleteClient(clientId))
-                .setNegativeButton("No", null)
-                .show();
+    @Override public void onBackPressed() {
+        if (exit) { finish(); return; }
+        Toast.makeText(this, "Press Back again to Exit", Toast.LENGTH_SHORT).show();
+        exit = true;
+        new Handler().postDelayed(() -> exit = false, 3000);
     }
 
-    private void deleteClient(int clientId) {
-        // Kill the client if it's open
-        if (webViews.get(clientId) != null) {
-            killClient(clientId);
-        }
-
-        // Remove from configuredClientIds
-        configuredClientIds.remove(clientId);
-
-        // Delete the TinyDB file
-        TinyDB db = new TinyDB(this, "client_prefs_" + clientId);
-        db.clear(); // Clear all preferences
-        File prefsFile = new File(getApplicationInfo().dataDir, "shared_prefs/client_prefs_" + clientId + ".xml");
-        if (prefsFile.exists()) {
-            prefsFile.delete();
-        }
-
-        Toast.makeText(this, "Client " + clientId + " and its data deleted.", Toast.LENGTH_SHORT).show();
-
-        // If no clients are left, create a new one
-        if (configuredClientIds.isEmpty()) {
-            createNewClient();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
+    @Override protected void onDestroy() {
         super.onDestroy();
-        for (int i = 0; i < webViews.size(); i++) {
-            webViews.valueAt(i).destroy();
-        }
+        for (int i = 0; i < webViews.size(); i++) webViews.valueAt(i).destroy();
         webViews.clear();
         layouts.clear();
     }
 
-    private void fullScreenOn() {
-        WindowInsetsControllerCompat windowInsetsController = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        if (windowInsetsController != null) {
-            windowInsetsController.hide(WindowInsetsCompat.Type.systemBars());
-            windowInsetsController.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-        }
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().hide();
-        }
+    @Override protected void onSaveInstanceState(@NonNull Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putInt("activeClientId", activeClientId);
     }
 
-    @Override
-    protected void onSaveInstanceState(@NonNull Bundle outState) {
-        super.onSaveInstanceState(outState);
-        outState.putInt("activeClientId", activeClientId);
-        // Client configurations are saved in TinyDB, so they persist automatically.
-    }
-
-    @Override
-    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
-        super.onRestoreInstanceState(savedInstanceState);
-        // Don't automatically restore all webviews to avoid heavy load on startup.
-        // The user can reopen them from the menu. We just restore the active one.
-        activeClientId = savedInstanceState.getInt("activeClientId", -1);
-        if (activeClientId != -1) {
-            openClient(activeClientId);
-        }
+    @Override protected void onRestoreInstanceState(@NonNull Bundle in) {
+        super.onRestoreInstanceState(in);
+        activeClientId = in.getInt("activeClientId", -1);
+        if (activeClientId != -1) openClient(activeClientId);
     }
 }
