@@ -1115,7 +1115,7 @@ public class MainActivity extends AppCompatActivity {
         fabContainer.setOnClickListener(v -> {
             WebView targetWebView = webViews.get(buttonData.clientId);
             if (targetWebView != null) {
-                dispatchKeyEvent(targetWebView, buttonData.keyCode);
+                dispatchKeyEvent(targetWebView, buttonData);
             } else {
                 Toast.makeText(this, "Client " + getClientDisplayName(buttonData.clientId) + " is not active.", Toast.LENGTH_SHORT).show();
             }
@@ -1324,7 +1324,23 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void dispatchKeyEvent(WebView webView, int keyCode) {
+    private final Map<String, Runnable> timedRepeatMacroRunnables = new HashMap<>();
+
+    private void dispatchKeyEvent(WebView webView, ActionButtonData buttonData) {
+        switch (buttonData.macroType) {
+            case ActionButtonData.TYPE_NORMAL:
+                dispatchSingleKeyEvent(webView, buttonData.keyCode);
+                break;
+            case ActionButtonData.TYPE_MACRO:
+                executeMacro(webView, buttonData);
+                break;
+            case ActionButtonData.TYPE_TIMED_REPEAT_MACRO:
+                toggleTimedRepeatMacro(webView, buttonData);
+                break;
+        }
+    }
+
+    private void dispatchSingleKeyEvent(WebView webView, int keyCode) {
         String key;
         String code;
         switch (keyCode) {
@@ -1355,6 +1371,42 @@ public class MainActivity extends AppCompatActivity {
                 "}" +
                 "})()";
         webView.evaluateJavascript(script, null);
+    }
+
+    private void executeMacro(WebView webView, ActionButtonData buttonData) {
+        String[] keys = buttonData.macroKeys.split(",");
+        Handler handler = new Handler();
+        for (int i = 0; i < keys.length; i++) {
+            final int keyCode = Integer.parseInt(keys[i].trim());
+            final int delay = (int) (buttonData.delayBetweenKeys * 1000 * i);
+            handler.postDelayed(() -> dispatchSingleKeyEvent(webView, keyCode), delay);
+        }
+    }
+
+    private void toggleTimedRepeatMacro(WebView webView, ActionButtonData buttonData) {
+        buttonData.isToggleOn = !buttonData.isToggleOn;
+        if (buttonData.isToggleOn) {
+            // Start repeating
+            Runnable runnable = new Runnable() {
+                @Override
+                public void run() {
+                    dispatchSingleKeyEvent(webView, buttonData.repeatKey);
+                    timedRepeatMacroRunnables.get(buttonData.keyText).postDelayed(this, (long) (buttonData.repeatInterval * 1000));
+                }
+            };
+            timedRepeatMacroRunnables.put(buttonData.keyText, runnable);
+            // Initial dispatch
+            dispatchSingleKeyEvent(webView, buttonData.repeatKey);
+            timedRepeatMacroRunnables.get(buttonData.keyText).postDelayed(runnable, (long) (buttonData.repeatInterval * 1000));
+        } else {
+            // Stop repeating
+            if (timedRepeatMacroRunnables.containsKey(buttonData.keyText)) {
+                timedRepeatMacroRunnables.get(buttonData.keyText).removeCallbacksAndMessages(null);
+                timedRepeatMacroRunnables.remove(buttonData.keyText);
+            }
+        }
+        // Update button appearance to reflect toggle state (e.g., change color)
+        // This part needs to be implemented based on how you want to visually represent the toggle
     }
 
 
