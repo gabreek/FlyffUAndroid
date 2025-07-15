@@ -47,6 +47,7 @@ import com.google.gson.reflect.TypeToken;
 
 import java.io.File;
 import java.lang.reflect.Type;
+import java.util.stream.Stream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -199,9 +200,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Load all action buttons for all configured clients at startup
-        for (int clientId : configuredClientIds) {
-            loadActionButtonsState(clientId);
-        }
+        // for (int clientId : configuredClientIds) {
+        //     loadActionButtonsState(clientId);
+        // }
 
         if (savedInstanceState == null) {
             if (configuredClientIds.isEmpty()) {
@@ -408,6 +409,7 @@ public class MainActivity extends AppCompatActivity {
         }
         activeClientId = id;
         loadClientState(activeClientId);
+        loadActionButtonsState(activeClientId);
         setTitle(getClientDisplayName(id));
         WebView w = webViews.get(id);
         if (w != null) {
@@ -728,47 +730,74 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        final CharSequence[] buttonLabels = clientButtons.stream()
-                .map(data -> data.keyText)
+        final CharSequence[] buttonLabels = Stream.concat(Stream.of("All buttons"), clientButtons.stream()
+                .map(data -> data.keyText))
                 .toArray(CharSequence[]::new);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Select Button to Color");
         builder.setItems(buttonLabels, (dialog, whichButton) -> {
             String selectedKeyText = buttonLabels[whichButton].toString();
-            // Find the ActionButtonData object for the selected button
-            ActionButtonData selectedButtonData = null;
-            View selectedFabView = null;
-            for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
-                if (entry.getValue().keyText.equals(selectedKeyText)) {
-                    selectedButtonData = entry.getValue();
-                    selectedFabView = entry.getKey();
-                    break;
-                }
-            }
-
-            if (selectedButtonData != null && selectedFabView != null) {
-                final ActionButtonData finalSelectedButtonData = selectedButtonData;
-                final View finalSelectedFabView = selectedFabView;
-
+            if (selectedKeyText.equals("All buttons")) {
                 final CharSequence[] colorNames = {"Red", "Green", "Blue", "Black", "White", "Gray"};
                 final int[] colors = {Color.RED, Color.GREEN, Color.BLUE, Color.BLACK, Color.WHITE, Color.GRAY};
 
                 AlertDialog.Builder colorBuilder = new AlertDialog.Builder(this);
-                colorBuilder.setTitle("Select Color for " + selectedKeyText);
+                colorBuilder.setTitle("Select Color for All Buttons");
                 colorBuilder.setItems(colorNames, (colorDialog, whichColor) -> {
                     int newColor = colors[whichColor];
-                    finalSelectedButtonData.color = newColor;
-
-                    // Update the background color of the existing FAB view
-                    android.graphics.drawable.GradientDrawable background = (android.graphics.drawable.GradientDrawable) finalSelectedFabView.getBackground();
-                    if (background != null) {
-                        background.setColor(newColor);
+                    for (ActionButtonData data : clientButtons) {
+                        data.color = newColor;
+                        // Find the corresponding FAB view and update its color
+                        for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
+                            if (entry.getValue().equals(data)) {
+                                android.graphics.drawable.GradientDrawable background = (android.graphics.drawable.GradientDrawable) entry.getKey().getBackground();
+                                if (background != null) {
+                                    background.setColor(newColor);
+                                }
+                                break;
+                            }
+                        }
                     }
-                    Toast.makeText(this, selectedKeyText + " color changed to " + colorNames[whichColor], Toast.LENGTH_SHORT).show();
-                    saveActionButtonsState(finalSelectedButtonData.clientId); // Save state after color change
+                    Toast.makeText(this, "All buttons colored " + colorNames[whichColor], Toast.LENGTH_SHORT).show();
+                    saveActionButtonsState(clientId); // Save state after color change
                 });
                 colorBuilder.show();
+            } else {
+                // Find the ActionButtonData object for the selected button
+                ActionButtonData selectedButtonData = null;
+                View selectedFabView = null;
+                for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
+                    if (entry.getValue().keyText.equals(selectedKeyText)) {
+                        selectedButtonData = entry.getValue();
+                        selectedFabView = entry.getKey();
+                        break;
+                    }
+                }
+
+                if (selectedButtonData != null && selectedFabView != null) {
+                    final ActionButtonData finalSelectedButtonData = selectedButtonData;
+                    final View finalSelectedFabView = selectedFabView;
+
+                    final CharSequence[] colorNames = {"Red", "Green", "Blue", "Black", "White", "Gray"};
+                    final int[] colors = {Color.RED, Color.GREEN, Color.BLUE, Color.BLACK, Color.WHITE, Color.GRAY};
+
+                    AlertDialog.Builder colorBuilder = new AlertDialog.Builder(this);
+                    colorBuilder.setTitle("Select Color for " + selectedKeyText);
+                    colorBuilder.setItems(colorNames, (colorDialog, whichColor) -> {
+                        int newColor = colors[whichColor];
+                        finalSelectedButtonData.color = newColor;
+
+                        // Update the background color of the existing FAB view
+                        android.graphics.drawable.GradientDrawable background = (android.graphics.drawable.GradientDrawable) finalSelectedFabView.getBackground();
+                        if (background != null) {
+                            background.setColor(newColor);
+                        }
+                        Toast.makeText(this, selectedKeyText + " color changed to " + colorNames[whichColor], Toast.LENGTH_SHORT).show();
+                        saveActionButtonsState(finalSelectedButtonData.clientId); // Save state after color change
+                    });
+                    colorBuilder.show();
+                }
             }
         });
         builder.show();
