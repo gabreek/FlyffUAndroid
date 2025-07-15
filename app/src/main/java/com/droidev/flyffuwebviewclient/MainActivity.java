@@ -833,7 +833,17 @@ public class MainActivity extends AppCompatActivity {
                     colorBuilder.setTitle("Select Color for " + selectedKeyText);
                     colorBuilder.setItems(colorNames, (colorDialog, whichColor) -> {
                         int newColor = colors[whichColor];
-                        finalSelectedButtonData.color = newColor;
+
+                        // Find the actual ActionButtonData object in clientActionButtonsData and update its color
+                        List<ActionButtonData> currentClientButtons = clientActionButtonsData.get(finalSelectedButtonData.clientId);
+                        if (currentClientButtons != null) {
+                            for (ActionButtonData data : currentClientButtons) {
+                                if (data.keyText.equals(finalSelectedButtonData.keyText) && data.clientId == finalSelectedButtonData.clientId) {
+                                    data.color = newColor; // Update the color in the persisted list
+                                    break;
+                                }
+                            }
+                        }
 
                         // Update the background color of the existing FAB view
                         android.graphics.drawable.GradientDrawable background = (android.graphics.drawable.GradientDrawable) finalSelectedFabView.getBackground();
@@ -1125,6 +1135,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Add the container to the root view and the map
         rootContainer.addView(fabContainer);
+        // Ensure fabViewToActionDataMap stores the latest ActionButtonData object
         fabViewToActionDataMap.put(fabContainer, buttonData);
 
         // Ensure clientActionButtonsData is updated for this button's client
@@ -1151,6 +1162,8 @@ public class MainActivity extends AppCompatActivity {
 
         // Make the entire container draggable
         makeFabDraggable(fabContainer);
+
+        refreshAllActionButtonsDisplay();
 
         return fabContainer;
     }
