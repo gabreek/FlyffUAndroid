@@ -155,7 +155,6 @@ public class MainActivity extends AppCompatActivity {
             return java.util.Objects.hash(keyText, keyCode, x, y, color, clientId, macroType, macroKeys, delayBetweenKeys, repeatKey, repeatInterval, isToggleOn);
         }
     }
-    }
 
     /* FAB movement */
     private int _xDelta;
