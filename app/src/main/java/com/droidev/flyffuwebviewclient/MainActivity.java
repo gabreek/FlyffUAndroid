@@ -750,7 +750,7 @@ public class MainActivity extends AppCompatActivity {
                         data.color = newColor;
                         // Find the corresponding FAB view and update its color
                         for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
-                            if (entry.getValue().equals(data)) {
+                            if (entry.getValue().keyText.equals(data.keyText) && entry.getValue().clientId == data.clientId) {
                                 android.graphics.drawable.GradientDrawable background = (android.graphics.drawable.GradientDrawable) entry.getKey().getBackground();
                                 if (background != null) {
                                     background.setColor(newColor);
@@ -1052,7 +1052,6 @@ public class MainActivity extends AppCompatActivity {
             List<ActionButtonData> loadedData = gson.fromJson(json, type);
             if (loadedData != null) {
                 clientActionButtonsData.put(clientId, loadedData);
-                Toast.makeText(this, "Loaded action buttons for client " + getClientDisplayName(clientId) + ".", Toast.LENGTH_SHORT).show();
             }
         }
         if (clientActionButtonsData.get(clientId) == null) {
