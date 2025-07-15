@@ -85,6 +85,10 @@ public class MainActivity extends AppCompatActivity {
 
     private Gson gson = new Gson();
 
+    private String userAgent;
+    private String url;
+    private boolean exit = false;
+
     // Class to hold action button data for serialization
     private static class ActionButtonData {
         String keyText;
