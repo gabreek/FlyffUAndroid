@@ -805,7 +805,6 @@ public class MainActivity extends AppCompatActivity {
                 fabViewToActionDataMap.remove(fabViewToRemove);
 
                 // Remove from clientActionButtonsData
-                List<ActionButtonData> clientButtons = clientActionButtonsData.get(dataToRemove.clientId);
                 if (clientButtons != null) {
                     clientButtons.remove(dataToRemove);
                 }
