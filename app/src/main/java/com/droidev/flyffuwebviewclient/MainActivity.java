@@ -30,6 +30,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -47,7 +48,10 @@ import com.google.gson.reflect.TypeToken;
 
 import java.io.File;
 import java.lang.reflect.Type;
+import java.text.DecimalFormat;
+import java.util.Objects;
 import java.util.stream.Stream;
+import android.text.InputFilter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
