@@ -687,35 +687,29 @@ public class MainActivity extends AppCompatActivity {
 
         // Create a FrameLayout to hold the FAB and the TextView
         FrameLayout fabContainer = new FrameLayout(this);
-        int fabSizePx = dpToPx(36); // Smaller size for action buttons
+        int fabSizePx = dpToPx(40); // Adjusted size for action buttons
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSizePx, fabSizePx);
         fabContainer.setLayoutParams(containerParams);
         fabContainer.setAlpha(0.5f); // Set transparency
-
-        // Create the round FloatingActionButton
-        FloatingActionButton newFab = new FloatingActionButton(this);
-        FrameLayout.LayoutParams newFabParams = new FrameLayout.LayoutParams(dpToPx(36), dpToPx(36));
-        newFabParams.gravity = Gravity.CENTER; // Center newFab within fabContainer
-        newFab.setLayoutParams(newFabParams);
-        newFab.setBackgroundTintList(ColorStateList.valueOf(Color.BLACK)); // Set background to black
-        newFab.setUseCompatPadding(false); // Disable padding for better control
-        newFab.setImageDrawable(null); // No icon
-        newFab.setClickable(false); // Ensure inner FAB does not consume clicks
-        newFab.setFocusable(false); // Ensure inner FAB does not consume focus
-        newFab.setElevation(0f); // Remove shadow
+        fabContainer.setBackgroundResource(R.drawable.circular_button_background); // Set circular background directly on container
+        fabContainer.setElevation(0f); // Remove shadow
 
         // Create the TextView for the label
         TextView label = new TextView(this);
-        label.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // CRITICAL CHANGE: Use WRAP_CONTENT for TextView to ensure it's drawn on top of the background
+        FrameLayout.LayoutParams labelParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        labelParams.gravity = Gravity.CENTER; // Center the text within the button
+        label.setLayoutParams(labelParams);
         label.setText(keyText);
         label.setTextColor(Color.WHITE);
-        label.setGravity(Gravity.CENTER);
-        label.setTextSize(10); // Reduced text size for better fit
+        label.setTextSize(12); // Reduced text size for better fit
         label.setClickable(false); // Ensure TextView does not consume clicks
         label.setFocusable(false); // Ensure TextView does not consume focus
 
-        // Add FAB and TextView to the container
-        fabContainer.addView(newFab);
+        // Add TextView to the container (only child)
         fabContainer.addView(label);
 
         // Set the click listener on the container
