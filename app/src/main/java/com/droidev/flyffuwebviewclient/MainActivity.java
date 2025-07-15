@@ -687,7 +687,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Create a FrameLayout to hold the FAB and the TextView
         FrameLayout fabContainer = new FrameLayout(this);
-        int fabSizePx = dpToPx(56); // Slightly smaller size
+        int fabSizePx = dpToPx(48); // Smaller size for action buttons
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSizePx, fabSizePx);
         fabContainer.setLayoutParams(containerParams);
         fabContainer.setAlpha(0.5f); // Set transparency
