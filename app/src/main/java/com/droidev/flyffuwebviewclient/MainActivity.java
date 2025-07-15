@@ -201,6 +201,7 @@ public class MainActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appTinyDB = new TinyDB(this, "app_prefs");
+        isActionButtonsVisible = appTinyDB.getBoolean("isActionButtonsVisible");
         setContentView(R.layout.activity_main);
         setTitle("FlyffU Android");
 
@@ -219,6 +220,7 @@ public class MainActivity extends AppCompatActivity {
         fabHideShow = findViewById(R.id.fab_hide_show);
         fabHideShow.setOnClickListener(v -> {
             isActionButtonsVisible = !isActionButtonsVisible;
+            appTinyDB.putBoolean("isActionButtonsVisible", isActionButtonsVisible);
             refreshAllActionButtonsDisplay();
         });
 
@@ -1385,6 +1387,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void toggleTimedRepeatMacro(WebView webView, ActionButtonData buttonData) {
         buttonData.isToggleOn = !buttonData.isToggleOn;
+        saveActionButtonsState(buttonData.clientId);
         if (buttonData.isToggleOn) {
             // Start repeating
             Handler handler = new Handler();
