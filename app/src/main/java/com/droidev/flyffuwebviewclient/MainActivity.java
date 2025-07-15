@@ -97,12 +97,31 @@ public class MainActivity extends AppCompatActivity {
         float y;
         int color; // Store color as an int
 
-        public ActionButtonData(String keyText, int keyCode, float x, float y, int color) {
+        public ActionButtonData(String keyText, int keyCode, float x, float y, int color, int clientId) {
             this.keyText = keyText;
             this.keyCode = keyCode;
             this.x = x;
             this.y = y;
             this.color = color;
+            this.clientId = clientId;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ActionButtonData that = (ActionButtonData) o;
+            return keyCode == that.keyCode &&
+                   Float.compare(that.x, x) == 0 &&
+                   Float.compare(that.y, y) == 0 &&
+                   color == that.color &&
+                   clientId == that.clientId &&
+                   keyText.equals(that.keyText);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(keyText, keyCode, x, y, color, clientId);
         }
     }
 
@@ -170,6 +189,11 @@ public class MainActivity extends AppCompatActivity {
         setupFabTouchListener();
 
         configuredClientIds.addAll(getExistingClientIdsFromFileSystem());
+
+        // Load all action buttons for all configured clients at startup
+        for (int clientId : configuredClientIds) {
+            loadActionButtonsState(clientId);
+        }
 
         if (savedInstanceState == null) {
             if (configuredClientIds.isEmpty()) {
@@ -341,7 +365,6 @@ public class MainActivity extends AppCompatActivity {
         webViews.put(id, w);
         switchToClient(id);
         floatingActionButton.setVisibility(View.VISIBLE);
-        loadActionButtonsState(id); // Load action buttons when client is opened
     }
 
     private void switchToClient(int id) {
@@ -371,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.hideSoftInputFromWindow(w.getWindowToken(), 0);
         }
-        loadActionButtonsState(id); // Load action buttons for the newly active client
+        
     }
 
     private void switchToNextClient() {
@@ -726,7 +749,7 @@ public class MainActivity extends AppCompatActivity {
                         background.setColor(newColor);
                     }
                     Toast.makeText(this, selectedKeyText + " color changed to " + colorNames[whichColor], Toast.LENGTH_SHORT).show();
-                    saveActionButtonsState(activeClientId); // Save state after color change
+                    saveActionButtonsState(finalSelectedButtonData.clientId); // Save state after color change
                 });
                 colorBuilder.show();
             }
@@ -762,8 +785,15 @@ public class MainActivity extends AppCompatActivity {
             if (fabViewToRemove != null && dataToRemove != null) {
                 rootContainer.removeView(fabViewToRemove);
                 fabViewToActionDataMap.remove(fabViewToRemove);
+
+                // Remove from clientActionButtonsData
+                List<ActionButtonData> clientButtons = clientActionButtonsData.get(dataToRemove.clientId);
+                if (clientButtons != null) {
+                    clientButtons.remove(dataToRemove);
+                }
+
                 Toast.makeText(this, selectedKeyText + " Action Button deleted.", Toast.LENGTH_SHORT).show();
-                saveActionButtonsState(activeClientId); // Save state after deletion
+                saveActionButtonsState(dataToRemove.clientId); // Save state after deletion
             }
         });
         builder.show();
@@ -797,7 +827,7 @@ public class MainActivity extends AppCompatActivity {
                 int keyCode = KeyEvent.keyCodeFromString("KEYCODE_" + key);
                 if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
                     // Default position (0,0) and black color
-                    ActionButtonData newButtonData = new ActionButtonData(key, keyCode, 0f, 0f, Color.BLACK);
+                    ActionButtonData newButtonData = new ActionButtonData(key, keyCode, 0f, 0f, Color.BLACK, activeClientId);
                     createCustomFab(newButtonData);
                 } else {
                     Toast.makeText(this, "Invalid key", Toast.LENGTH_SHORT).show();
@@ -856,7 +886,29 @@ public class MainActivity extends AppCompatActivity {
 
         // Add the container to the root view and the map
         rootContainer.addView(fabContainer);
-        fabViewToActionDataMap.put(fabContainer, buttonData); // Use new map
+        fabViewToActionDataMap.put(fabContainer, buttonData);
+
+        // Ensure clientActionButtonsData is updated for this button's client
+        List<ActionButtonData> clientSpecificButtons = clientActionButtonsData.get(buttonData.clientId);
+        if (clientSpecificButtons == null) {
+            clientSpecificButtons = new ArrayList<>();
+            clientActionButtonsData.put(buttonData.clientId, clientSpecificButtons);
+        }
+
+        // Check if this button (by keyText and keyCode) already exists in the client's list
+        // If it exists, update its data. Otherwise, add it.
+        boolean buttonExistsInClientList = false;
+        for (int i = 0; i < clientSpecificButtons.size(); i++) {
+            ActionButtonData existingData = clientSpecificButtons.get(i);
+            if (existingData.keyText.equals(buttonData.keyText) && existingData.keyCode == buttonData.keyCode) {
+                clientSpecificButtons.set(i, buttonData); // Update existing data
+                buttonExistsInClientList = true;
+                break;
+            }
+        }
+        if (!buttonExistsInClientList) {
+            clientSpecificButtons.add(buttonData); // Add new button data
+        }
 
         // Make the entire container draggable
         makeFabDraggable(fabContainer);
@@ -893,6 +945,13 @@ public class MainActivity extends AppCompatActivity {
                         v.performClick();
                     } else {
                         snapFabToEdge(v);
+                        // Update ActionButtonData and save state
+                        ActionButtonData data = fabViewToActionDataMap.get(v);
+                        if (data != null) {
+                            data.x = v.getX();
+                            data.y = v.getY();
+                            saveActionButtonsState(data.clientId);
+                        }
                     }
                     return true;
                 case MotionEvent.ACTION_MOVE:
@@ -910,24 +969,22 @@ public class MainActivity extends AppCompatActivity {
             rootContainer.removeView(fab);
         }
         fabViewToActionDataMap.clear();
-        // Also clear data from TinyDB for the active client
-        if (activeClientId != -1) {
-            TinyDB tinyDB = new TinyDB(this, "client_prefs_" + activeClientId);
-            tinyDB.remove(ACTION_BUTTONS_DATA_KEY);
-        }
-        Toast.makeText(this, "All custom Action Buttons deleted.", Toast.LENGTH_SHORT).show();
+        
+        
     }
 
     private void saveActionButtonsState(int clientId) {
-        List<ActionButtonData> dataToSave = new ArrayList<>(fabViewToActionDataMap.values());
+        List<ActionButtonData> dataToSave = clientActionButtonsData.get(clientId);
+        if (dataToSave == null) {
+            dataToSave = new ArrayList<>(); // Should not happen if loadActionButtonsState is called, but for safety
+        }
         String json = gson.toJson(dataToSave);
         TinyDB tinyDB = new TinyDB(this, "client_prefs_" + clientId);
         tinyDB.putString(ACTION_BUTTONS_DATA_KEY, json);
     }
 
     private void loadActionButtonsState(int clientId) {
-        // Clear existing buttons for the current client before loading new ones
-        deleteAllCustomFabs();
+        
 
         TinyDB tinyDB = new TinyDB(this, "client_prefs_" + clientId);
         String json = tinyDB.getString(ACTION_BUTTONS_DATA_KEY);
