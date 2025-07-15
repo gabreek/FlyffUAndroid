@@ -85,8 +85,8 @@ public class MainActivity extends AppCompatActivity {
 
     private Gson gson = new Gson();
 
-    private String userAgent;
-    private String url;
+    private String userAgent = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5304.105 Mobile Safari/537.36";
+    private String url = "";
     private boolean exit = false;
 
     // Class to hold action button data for serialization
@@ -205,6 +205,7 @@ public class MainActivity extends AppCompatActivity {
                 else switchToClient(first);
             }
         }
+        refreshAllActionButtonsDisplay();
     }
 
     /* ---------- WebView creation with .bin caching ---------- */
@@ -366,6 +367,7 @@ public class MainActivity extends AppCompatActivity {
         webViews.put(id, w);
         switchToClient(id);
         floatingActionButton.setVisibility(View.VISIBLE);
+        refreshAllActionButtonsDisplay();
     }
 
     private void switchToClient(int id) {
@@ -426,7 +428,7 @@ public class MainActivity extends AppCompatActivity {
             activeClientId = webViews.keyAt(0);
             switchToClient(activeClientId);
         }
-    }
+        refreshAllActionButtonsDisplay();
 
     private void deleteClient(int id) {
         if (webViews.get(id) != null) killClient(id);
@@ -842,12 +844,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private FrameLayout createCustomFab(ActionButtonData buttonData) {
-        WebView targetWebView = webViews.get(activeClientId);
-        if (targetWebView == null) {
-            Toast.makeText(this, "No active client to attach the button to.", Toast.LENGTH_SHORT).show();
-            return null; // Return null if no active client
-        }
-
         // Create a FrameLayout to hold the FAB and the TextView
         FrameLayout fabContainer = new FrameLayout(this);
         int fabSizePx = dpToPx(40); // Adjusted size for action buttons
@@ -883,7 +879,14 @@ public class MainActivity extends AppCompatActivity {
         fabContainer.addView(label);
 
         // Set the click listener on the container
-        fabContainer.setOnClickListener(v -> dispatchKeyEvent(targetWebView, buttonData.keyCode)); // Use keyCode from buttonData
+        fabContainer.setOnClickListener(v -> {
+            WebView targetWebView = webViews.get(buttonData.clientId);
+            if (targetWebView != null) {
+                dispatchKeyEvent(targetWebView, buttonData.keyCode);
+            } else {
+                Toast.makeText(this, "Client " + getClientDisplayName(buttonData.clientId) + " is not active.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         // Add the container to the root view and the map
         rootContainer.addView(fabContainer);
@@ -965,6 +968,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    private void refreshAllActionButtonsDisplay() {
+        deleteAllCustomFabs(); // Clear all existing FABs
+        for (Map.Entry<Integer, List<ActionButtonData>> entry : clientActionButtonsData.entrySet()) {
+            for (ActionButtonData data : entry.getValue()) {
+                createCustomFab(data);
+            }
+        }
+    }
+
     private void deleteAllCustomFabs() {
         for (View fab : fabViewToActionDataMap.keySet()) {
             rootContainer.removeView(fab);
@@ -985,8 +997,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadActionButtonsState(int clientId) {
-        
-
         TinyDB tinyDB = new TinyDB(this, "client_prefs_" + clientId);
         String json = tinyDB.getString(ACTION_BUTTONS_DATA_KEY);
 
@@ -994,10 +1004,11 @@ public class MainActivity extends AppCompatActivity {
             Type type = new TypeToken<List<ActionButtonData>>() {}.getType();
             List<ActionButtonData> loadedData = gson.fromJson(json, type);
             if (loadedData != null) {
-                for (ActionButtonData data : loadedData) {
-                    createCustomFab(data); // Recreate the FAB using the loaded data
-                }
+                clientActionButtonsData.put(clientId, loadedData);
             }
+        }
+        if (clientActionButtonsData.get(clientId) == null) {
+            clientActionButtonsData.put(clientId, new ArrayList<>());
         }
     }
 

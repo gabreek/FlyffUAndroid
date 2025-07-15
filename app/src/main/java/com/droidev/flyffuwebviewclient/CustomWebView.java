@@ -6,6 +6,7 @@ import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 public class CustomWebView extends WebView {
     public CustomWebView(Context context) {
@@ -26,6 +27,10 @@ public class CustomWebView extends WebView {
     protected void init() {
         setFocusable(true);
         setFocusableInTouchMode(true);
+        getSettings().setJavaScriptEnabled(true);
+        getSettings().setDomStorageEnabled(true);
+        getSettings().setAppCacheEnabled(true);
+        setWebViewClient(new WebViewClient());
     }
 
     @Override
