@@ -1424,7 +1424,10 @@ public class MainActivity extends AppCompatActivity {
                     background.setColor(buttonData.color); // Revert to original color
                 }
             }
-        }/* ---------- lifecycle ---------- */
+        }
+    }
+
+    /* ---------- lifecycle ---------- */
     private void fullScreenOn() {
         WindowInsetsControllerCompat c = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         if (c != null) {
