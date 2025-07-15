@@ -30,7 +30,13 @@ public class CustomWebView extends WebView {
         getSettings().setJavaScriptEnabled(true);
         getSettings().setDomStorageEnabled(true);
         getSettings().setAppCacheEnabled(true);
-        setWebViewClient(new WebViewClient());
+        setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                view.loadUrl(url);
+                return true;
+            }
+        });
     }
 
     @Override
