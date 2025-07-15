@@ -691,7 +691,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showActionButtonsMenu() {
-        final CharSequence[] items = {"New", "Color", "Delete", "Save"};
+        final CharSequence[] items = {"New", "Color", "Delete"};
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Action Button Configuration");
         builder.setItems(items, (dialog, item) -> {
@@ -699,17 +699,9 @@ public class MainActivity extends AppCompatActivity {
             if (selectedOption.equals("New")) {
                 showKeyTypeDialog();
             } else if (selectedOption.equals("Color")) {
-                showColorSelectionDialog();
+                showColorSelectionDialog(activeClientId);
             } else if (selectedOption.equals("Delete")) {
-                showDeleteActionButtonDialog();
-            } else if (selectedOption.equals("Save")) {
-                if (activeClientId != -1) {
-                    saveActionButtonsState(activeClientId);
-                    Toast.makeText(this, "Action Buttons saved.", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this, "No active client to save buttons for.", Toast.LENGTH_SHORT).show();
-                }
-            }
+                showDeleteActionButtonDialog(activeClientId);
         });
         builder.show();
     }
@@ -728,13 +720,14 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    private void showColorSelectionDialog() {
-        if (fabViewToActionDataMap.isEmpty()) {
-            Toast.makeText(this, "No action buttons to color.", Toast.LENGTH_SHORT).show();
+    private void showColorSelectionDialog(int clientId) {
+        List<ActionButtonData> clientButtons = clientActionButtonsData.get(clientId);
+        if (clientButtons == null || clientButtons.isEmpty()) {
+            Toast.makeText(this, "No action buttons for this client to color.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        final CharSequence[] buttonLabels = fabViewToActionDataMap.values().stream()
+        final CharSequence[] buttonLabels = clientButtons.stream()
                 .map(data -> data.keyText)
                 .toArray(CharSequence[]::new);
 
@@ -780,13 +773,14 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    private void showDeleteActionButtonDialog() {
-        if (fabViewToActionDataMap.isEmpty()) {
-            Toast.makeText(this, "No action buttons to delete.", Toast.LENGTH_SHORT).show();
+    private void showDeleteActionButtonDialog(int clientId) {
+        List<ActionButtonData> clientButtons = clientActionButtonsData.get(clientId);
+        if (clientButtons == null || clientButtons.isEmpty()) {
+            Toast.makeText(this, "No action buttons for this client to delete.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        final CharSequence[] buttonLabels = fabViewToActionDataMap.values().stream()
+        final CharSequence[] buttonLabels = clientButtons.stream()
                 .map(data -> data.keyText)
                 .toArray(CharSequence[]::new);
 
@@ -834,6 +828,7 @@ public class MainActivity extends AppCompatActivity {
             // Default position (0,0) and black color
             ActionButtonData newButtonData = new ActionButtonData(key, (int)keyCodeMap.get(key), 0f, 0f, Color.BLACK, activeClientId);
             createCustomFab(newButtonData);
+            Toast.makeText(this, "Action Button for '" + newButtonData.keyText + "' created.", Toast.LENGTH_SHORT).show();
         });
         builder.show();
     }
@@ -852,6 +847,7 @@ public class MainActivity extends AppCompatActivity {
                     // Default position (0,0) and black color
                     ActionButtonData newButtonData = new ActionButtonData(key, keyCode, 0f, 0f, Color.BLACK, activeClientId);
                     createCustomFab(newButtonData);
+            Toast.makeText(this, "Action Button for '" + newButtonData.keyText + "' created.", Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(this, "Invalid key", Toast.LENGTH_SHORT).show();
                 }
@@ -937,7 +933,6 @@ public class MainActivity extends AppCompatActivity {
         // Make the entire container draggable
         makeFabDraggable(fabContainer);
 
-        Toast.makeText(this, "Action Button for '" + buttonData.keyText + "' created.", Toast.LENGTH_SHORT).show();
         return fabContainer;
     }
 
@@ -991,8 +986,11 @@ public class MainActivity extends AppCompatActivity {
     private void refreshAllActionButtonsDisplay() {
         deleteAllCustomFabs(); // Clear all existing FABs
         for (Map.Entry<Integer, List<ActionButtonData>> entry : clientActionButtonsData.entrySet()) {
-            for (ActionButtonData data : entry.getValue()) {
-                createCustomFab(data);
+            int clientId = entry.getKey();
+            if (webViews.get(clientId) != null) { // Only display buttons for active clients
+                for (ActionButtonData data : entry.getValue()) {
+                    createCustomFab(data);
+                }
             }
         }
     }
@@ -1025,6 +1023,7 @@ public class MainActivity extends AppCompatActivity {
             List<ActionButtonData> loadedData = gson.fromJson(json, type);
             if (loadedData != null) {
                 clientActionButtonsData.put(clientId, loadedData);
+                Toast.makeText(this, "Loaded action buttons for client " + getClientDisplayName(clientId) + ".", Toast.LENGTH_SHORT).show();
             }
         }
         if (clientActionButtonsData.get(clientId) == null) {
