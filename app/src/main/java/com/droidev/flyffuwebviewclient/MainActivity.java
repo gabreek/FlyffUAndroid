@@ -122,7 +122,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public int hashCode() {
-            return Objects.hash(keyText, keyCode, x, y, color, clientId);
+            return java.util.Objects.hash(keyText, keyCode, x, y, color, clientId);
         }
     }
 
