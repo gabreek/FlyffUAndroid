@@ -80,6 +80,8 @@ public class MainActivity extends AppCompatActivity {
 
     private LinearLayout linearLayout;
     private FloatingActionButton floatingActionButton;
+    private FloatingActionButton fabHideShow;
+    private boolean isActionButtonsVisible = true;
     private FrameLayout rootContainer;
     private final Map<Integer, List<ActionButtonData>> clientActionButtonsData = new HashMap<>();
     private final Map<View, ActionButtonData> fabViewToActionDataMap = new HashMap<>();
@@ -183,6 +185,12 @@ public class MainActivity extends AppCompatActivity {
         linearLayout   = findViewById(R.id.linearLayout);
         floatingActionButton = findViewById(R.id.fab);
         floatingActionButton.setAlpha(0.5f);
+
+        fabHideShow = findViewById(R.id.fab_hide_show);
+        fabHideShow.setOnClickListener(v -> {
+            isActionButtonsVisible = !isActionButtonsVisible;
+            refreshAllActionButtonsDisplay();
+        });
 
         DisplayMetrics dm = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(dm);
@@ -1014,13 +1022,25 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshAllActionButtonsDisplay() {
         deleteAllCustomFabs(); // Clear all existing FABs
+
+        boolean hasActionButtons = false;
         for (Map.Entry<Integer, List<ActionButtonData>> entry : clientActionButtonsData.entrySet()) {
             int clientId = entry.getKey();
             if (webViews.get(clientId) != null) { // Only display buttons for active clients
                 for (ActionButtonData data : entry.getValue()) {
-                    createCustomFab(data);
+                    if (isActionButtonsVisible) {
+                        createCustomFab(data);
+                    }
+                    hasActionButtons = true;
                 }
             }
+        }
+
+        if (hasActionButtons) {
+            fabHideShow.setVisibility(View.VISIBLE);
+            fabHideShow.setImageResource(isActionButtonsVisible ? R.drawable.ic_hide_show : R.drawable.ic_show_hide);
+        } else {
+            fabHideShow.setVisibility(View.GONE);
         }
     }
 
