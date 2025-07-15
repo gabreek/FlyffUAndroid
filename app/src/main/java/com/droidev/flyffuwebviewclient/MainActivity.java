@@ -1377,7 +1377,7 @@ public class MainActivity extends AppCompatActivity {
         String[] keys = buttonData.macroKeys.split(",");
         Handler handler = new Handler();
         for (int i = 0; i < keys.length; i++) {
-            final int keyCode = Integer.parseInt(keys[i].trim());
+            final int keyCode = KeyEvent.keyCodeFromString("KEYCODE_" + keys[i].trim().toUpperCase());
             final int delay = (int) (buttonData.delayBetweenKeys * 1000 * i);
             handler.postDelayed(() -> dispatchSingleKeyEvent(webView, keyCode), delay);
         }
@@ -1406,9 +1406,25 @@ public class MainActivity extends AppCompatActivity {
                 timedRepeatMacroHandlers.remove(buttonData.keyText);
             }
         }
-        // Update button appearance to reflect toggle state (e.g., change color)
-        // This part needs to be implemented based on how you want to visually represent the toggle
-    }
+        // Update button appearance to reflect toggle state
+        View fabView = null;
+        for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
+            if (entry.getValue().equals(buttonData)) {
+                fabView = entry.getKey();
+                break;
+            }
+        }
+
+        if (fabView != null) {
+            android.graphics.drawable.GradientDrawable background = (android.graphics.drawable.GradientDrawable) fabView.getBackground();
+            if (background != null) {
+                if (buttonData.isToggleOn) {
+                    background.setColor(Color.GREEN);
+                } else {
+                    background.setColor(buttonData.color); // Revert to original color
+                }
+            }
+        }
 
 
     /* ---------- lifecycle ---------- */
