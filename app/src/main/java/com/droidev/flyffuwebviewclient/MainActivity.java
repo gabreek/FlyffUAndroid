@@ -691,7 +691,11 @@ public class MainActivity extends AppCompatActivity {
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSizePx, fabSizePx);
         fabContainer.setLayoutParams(containerParams);
         fabContainer.setAlpha(0.5f); // Set transparency
-        fabContainer.setBackgroundResource(R.drawable.circular_button_background); // Set circular background directly on container
+        // Programmatically create circular background
+        android.graphics.drawable.GradientDrawable circularBackground = new android.graphics.drawable.GradientDrawable();
+        circularBackground.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        circularBackground.setColor(Color.BLACK);
+        fabContainer.setBackground(circularBackground); // Set circular background directly on container
         fabContainer.setElevation(0f); // Remove shadow
 
         // Create the TextView for the label
