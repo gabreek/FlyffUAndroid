@@ -1032,6 +1032,25 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void saveClientState(int clientId) {
+        TinyDB tinyDB = new TinyDB(this, "client_prefs_" + clientId);
+        WebView webView = webViews.get(clientId);
+        if (webView != null) {
+            tinyDB.putString("last_url", webView.getUrl());
+        }
+    }
+
+    private void loadClientState(int clientId) {
+        TinyDB tinyDB = new TinyDB(this, "client_prefs_" + clientId);
+        WebView webView = webViews.get(clientId);
+        if (webView != null) {
+            String lastUrl = tinyDB.getString("last_url");
+            if (!lastUrl.isEmpty()) {
+                webView.loadUrl(lastUrl);
+            }
+        }
+    }
+
     private void dispatchKeyEvent(WebView webView, int keyCode) {
         String key;
         String code;
