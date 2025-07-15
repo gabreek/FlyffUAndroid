@@ -95,20 +95,40 @@ public class MainActivity extends AppCompatActivity {
 
     // Class to hold action button data for serialization
     private static class ActionButtonData {
+        public static final int TYPE_NORMAL = 0;
+        public static final int TYPE_MACRO = 1;
+        public static final int TYPE_TIMED_REPEAT_MACRO = 2;
+
         String keyText;
         int keyCode;
         float x;
         float y;
         int color; // Store color as an int
         int clientId; // Add clientId field
+        int macroType; // 0: normal, 1: macro, 2: timed repeat macro
+        String macroKeys; // Comma-separated key codes for macro
+        float delayBetweenKeys; // Delay in seconds for macro
+        int repeatKey; // Single key code for timed repeat macro
+        float repeatInterval; // Interval in seconds for timed repeat macro
+        boolean isToggleOn; // For timed repeat macro
 
         public ActionButtonData(String keyText, int keyCode, float x, float y, int color, int clientId) {
+            this(keyText, keyCode, x, y, color, clientId, TYPE_NORMAL, null, 0.0f, 0, 0.0f, false);
+        }
+
+        public ActionButtonData(String keyText, int keyCode, float x, float y, int color, int clientId, int macroType, String macroKeys, float delayBetweenKeys, int repeatKey, float repeatInterval, boolean isToggleOn) {
             this.keyText = keyText;
             this.keyCode = keyCode;
             this.x = x;
             this.y = y;
             this.color = color;
             this.clientId = clientId;
+            this.macroType = macroType;
+            this.macroKeys = macroKeys;
+            this.delayBetweenKeys = delayBetweenKeys;
+            this.repeatKey = repeatKey;
+            this.repeatInterval = repeatInterval;
+            this.isToggleOn = isToggleOn;
         }
 
         @Override
@@ -121,13 +141,20 @@ public class MainActivity extends AppCompatActivity {
                    Float.compare(that.y, y) == 0 &&
                    color == that.color &&
                    clientId == that.clientId &&
-                   keyText.equals(that.keyText);
+                   macroType == that.macroType &&
+                   Float.compare(that.delayBetweenKeys, delayBetweenKeys) == 0 &&
+                   repeatKey == that.repeatKey &&
+                   Float.compare(that.repeatInterval, repeatInterval) == 0 &&
+                   isToggleOn == that.isToggleOn &&
+                   keyText.equals(that.keyText) &&
+                   Objects.equals(macroKeys, that.macroKeys);
         }
 
         @Override
         public int hashCode() {
-            return java.util.Objects.hash(keyText, keyCode, x, y, color, clientId);
+            return java.util.Objects.hash(keyText, keyCode, x, y, color, clientId, macroType, macroKeys, delayBetweenKeys, repeatKey, repeatInterval, isToggleOn);
         }
+    }
     }
 
     /* FAB movement */
@@ -721,7 +748,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showKeyTypeDialog() {
-        final CharSequence[] items = {"Function Key", "Custom Key"};
+        final CharSequence[] items = {"Function Key", "Custom Key", "Macro", "Timed Repeat Macro"};
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Select Key Type");
         builder.setItems(items, (dialog, item) -> {
@@ -729,6 +756,10 @@ public class MainActivity extends AppCompatActivity {
                 showFunctionKeyDialog();
             } else if (items[item].equals("Custom Key")) {
                 showCustomKeyDialog();
+            } else if (items[item].equals("Macro")) {
+                showMacroCreationDialog();
+            } else if (items[item].equals("Timed Repeat Macro")) {
+                showTimedRepeatMacroCreationDialog();
             }
         });
         builder.show();
@@ -894,6 +925,149 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(this, "Please enter a single character", Toast.LENGTH_SHORT).show();
             }
+        });
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+
+    private void showMacroCreationDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Create Macro Button");
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 20, 50, 20);
+
+        final EditText nameInput = new EditText(this);
+        nameInput.setHint("Macro Name (max 2 letters)");
+        nameInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        nameInput.setFilters(new InputFilter[] {new InputFilter.LengthFilter(2)});
+        layout.addView(nameInput);
+
+        final EditText keysInput = new EditText(this);
+        keysInput.setHint("Keys (e.g., 1,2,3)");
+        keysInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        layout.addView(keysInput);
+
+        TextView delayLabel = new TextView(this);
+        delayLabel.setText("Delay between keys: 0.5s");
+        layout.addView(delayLabel);
+
+        SeekBar delaySlider = new SeekBar(this);
+        delaySlider.setMax(45); // 0.5s to 5s, step 0.1s (45 steps)
+        delaySlider.setProgress(0); // Start at 0.5s
+        delaySlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                float delay = 0.5f + progress * 0.1f;
+                delayLabel.setText("Delay between keys: " + new DecimalFormat("0.0").format(delay) + "s");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        layout.addView(delaySlider);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            String name = nameInput.getText().toString().toUpperCase();
+            String keys = keysInput.getText().toString();
+            float delay = 0.5f + delaySlider.getProgress() * 0.1f;
+
+            if (name.isEmpty() || keys.isEmpty()) {
+                Toast.makeText(this, "Name and keys cannot be empty", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (name.length() > 2) {
+                Toast.makeText(this, "Name must be max 2 letters", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Default position (0,0) and black color
+            ActionButtonData newButtonData = new ActionButtonData(name, 0, 0f, 0f, Color.BLACK, activeClientId, ActionButtonData.TYPE_MACRO, keys, delay, 0, 0.0f, false);
+            createCustomFab(newButtonData);
+            Toast.makeText(this, "Macro Button '" + name + "' created.", Toast.LENGTH_SHORT).show();
+        });
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+
+    private void showTimedRepeatMacroCreationDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Create Timed Repeat Macro Button");
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 20, 50, 20);
+
+        final EditText nameInput = new EditText(this);
+        nameInput.setHint("Macro Name (max 2 letters)");
+        nameInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        nameInput.setFilters(new InputFilter[] {new InputFilter.LengthFilter(2)});
+        layout.addView(nameInput);
+
+        final EditText keyInput = new EditText(this);
+        keyInput.setHint("Single Key (e.g., 1)");
+        keyInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        keyInput.setFilters(new InputFilter[] {new InputFilter.LengthFilter(1)});
+        layout.addView(keyInput);
+
+        TextView intervalLabel = new TextView(this);
+        intervalLabel.setText("Repeat Interval: 0.5s");
+        layout.addView(intervalLabel);
+
+        SeekBar intervalSlider = new SeekBar(this);
+        intervalSlider.setMax(195); // 0.5s to 20s, step 0.1s (195 steps)
+        intervalSlider.setProgress(0); // Start at 0.5s
+        intervalSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                float interval = 0.5f + progress * 0.1f;
+                intervalLabel.setText("Repeat Interval: " + new DecimalFormat("0.0").format(interval) + "s");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        layout.addView(intervalSlider);
+
+        builder.setView(layout);
+
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            String name = nameInput.getText().toString().toUpperCase();
+            String key = keyInput.getText().toString();
+            float interval = 0.5f + intervalSlider.getProgress() * 0.1f;
+
+            if (name.isEmpty() || key.isEmpty()) {
+                Toast.makeText(this, "Name and key cannot be empty", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (name.length() > 2) {
+                Toast.makeText(this, "Name must be max 2 letters", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (key.length() != 1) {
+                Toast.makeText(this, "Key must be a single character", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            int repeatKeyCode = KeyEvent.keyCodeFromString("KEYCODE_" + key.toUpperCase());
+            if (repeatKeyCode == KeyEvent.KEYCODE_UNKNOWN) {
+                Toast.makeText(this, "Invalid key", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Default position (0,0) and black color
+            ActionButtonData newButtonData = new ActionButtonData(name, 0, 0f, 0f, Color.BLACK, activeClientId, ActionButtonData.TYPE_TIMED_REPEAT_MACRO, null, 0.0f, repeatKeyCode, interval, false);
+            createCustomFab(newButtonData);
+            Toast.makeText(this, "Timed Repeat Macro Button '" + name + "' created.", Toast.LENGTH_SHORT).show();
         });
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
         builder.show();
