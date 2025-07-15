@@ -42,7 +42,11 @@ import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
 import java.io.File;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int MAX_CLIENTS = 10;
     private static final String CLIENT_NAME_KEY = "client_custom_name";
+    private static final String ACTION_BUTTONS_DATA_KEY = "action_buttons_data";
 
     private final SparseArray<WebView> webViews = new SparseArray<>();
     private final SparseArray<FrameLayout> layouts = new SparseArray<>();
@@ -74,13 +79,28 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout linearLayout;
     private FloatingActionButton floatingActionButton;
     private FrameLayout rootContainer;
-    private final Map<View, WebView> customFabMap = new HashMap<>();
+    private final Map<Integer, List<ActionButtonData>> clientActionButtonsData = new HashMap<>();
+    private final Map<View, ActionButtonData> fabViewToActionDataMap = new HashMap<>();
     private final Map<String, Integer> keyCodeMap = new HashMap<>();
 
+    private Gson gson = new Gson();
 
-    private boolean exit = false;
-    private final String userAgent = System.getProperty("http.agent");
-    private final String url = "https://universe.flyff.com/play";
+    // Class to hold action button data for serialization
+    private static class ActionButtonData {
+        String keyText;
+        int keyCode;
+        float x;
+        float y;
+        int color; // Store color as an int
+
+        public ActionButtonData(String keyText, int keyCode, float x, float y, int color) {
+            this.keyText = keyText;
+            this.keyCode = keyCode;
+            this.x = x;
+            this.y = y;
+            this.color = color;
+        }
+    }
 
     /* FAB movement */
     private int _xDelta;
@@ -317,6 +337,7 @@ public class MainActivity extends AppCompatActivity {
         webViews.put(id, w);
         switchToClient(id);
         floatingActionButton.setVisibility(View.VISIBLE);
+        loadActionButtonsState(id); // Load action buttons when client is opened
     }
 
     private void switchToClient(int id) {
@@ -329,6 +350,11 @@ public class MainActivity extends AppCompatActivity {
             }
             return;
         }
+        // Save state of previously active client before switching
+        if (activeClientId != -1 && activeClientId != id) {
+            saveActionButtonsState(activeClientId);
+        }
+
         for (int i = 0; i < layouts.size(); i++) {
             int k = layouts.keyAt(i);
             layouts.get(k).setVisibility(k == id ? View.VISIBLE : View.GONE);
@@ -341,6 +367,7 @@ public class MainActivity extends AppCompatActivity {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.hideSoftInputFromWindow(w.getWindowToken(), 0);
         }
+        loadActionButtonsState(id); // Load action buttons for the newly active client
     }
 
     private void switchToNextClient() {
@@ -423,7 +450,7 @@ public class MainActivity extends AppCompatActivity {
                 SubMenu sm = sub.addSubMenu(getClientDisplayName(id));
                 boolean open = webViews.get(id) != null;
                 if (open) {
-                    sm.add(Menu.NONE, 6000 + id, 5, "Action Buttons");
+                    sm.add(Menu.NONE, 6000 + id, 0, "Action Buttons"); // Moved to first position with order 0
                     sm.add(Menu.NONE, 1000 + id, 1, "Switch");
                     sm.add(Menu.NONE, 2000 + id, 2, "Kill");
                 } else sm.add(Menu.NONE, 3000 + id, 1, "Open");
@@ -614,14 +641,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showActionButtonsMenu() {
-        final CharSequence[] items = {"Create new AB", "Delete all ABs"};
+        final CharSequence[] items = {"New", "Color", "Delete", "Save"};
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Action Button Configuration");
         builder.setItems(items, (dialog, item) -> {
-            if (items[item].equals("Create new AB")) {
+            String selectedOption = items[item].toString();
+            if (selectedOption.equals("New")) {
                 showKeyTypeDialog();
-            } else if (items[item].equals("Delete all ABs")) {
-                deleteAllCustomFabs();
+            } else if (selectedOption.equals("Color")) {
+                showColorSelectionDialog();
+            } else if (selectedOption.equals("Delete")) {
+                showDeleteActionButtonDialog();
+            } else if (selectedOption.equals("Save")) {
+                if (activeClientId != -1) {
+                    saveActionButtonsState(activeClientId);
+                    Toast.makeText(this, "Action Buttons saved.", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "No active client to save buttons for.", Toast.LENGTH_SHORT).show();
+                }
             }
         });
         builder.show();
@@ -641,6 +678,93 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
+    private void showColorSelectionDialog() {
+        if (fabViewToActionDataMap.isEmpty()) {
+            Toast.makeText(this, "No action buttons to color.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final CharSequence[] buttonLabels = fabViewToActionDataMap.values().stream()
+                .map(data -> data.keyText)
+                .toArray(CharSequence[]::new);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Select Button to Color");
+        builder.setItems(buttonLabels, (dialog, whichButton) -> {
+            String selectedKeyText = buttonLabels[whichButton].toString();
+            // Find the ActionButtonData object for the selected button
+            ActionButtonData selectedButtonData = null;
+            View selectedFabView = null;
+            for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
+                if (entry.getValue().keyText.equals(selectedKeyText)) {
+                    selectedButtonData = entry.getValue();
+                    selectedFabView = entry.getKey();
+                    break;
+                }
+            }
+
+            if (selectedButtonData != null && selectedFabView != null) {
+                final ActionButtonData finalSelectedButtonData = selectedButtonData;
+                final View finalSelectedFabView = selectedFabView;
+
+                final CharSequence[] colorNames = {"Red", "Green", "Blue", "Black", "White", "Gray"};
+                final int[] colors = {Color.RED, Color.GREEN, Color.BLUE, Color.BLACK, Color.WHITE, Color.GRAY};
+
+                AlertDialog.Builder colorBuilder = new AlertDialog.Builder(this);
+                colorBuilder.setTitle("Select Color for " + selectedKeyText);
+                colorBuilder.setItems(colorNames, (colorDialog, whichColor) -> {
+                    int newColor = colors[whichColor];
+                    finalSelectedButtonData.color = newColor;
+
+                    // Update the background color of the existing FAB view
+                    android.graphics.drawable.GradientDrawable background = (android.graphics.drawable.GradientDrawable) finalSelectedFabView.getBackground();
+                    if (background != null) {
+                        background.setColor(newColor);
+                    }
+                    Toast.makeText(this, selectedKeyText + " color changed to " + colorNames[whichColor], Toast.LENGTH_SHORT).show();
+                    saveActionButtonsState(activeClientId); // Save state after color change
+                });
+                colorBuilder.show();
+            }
+        });
+        builder.show();
+    }
+
+    private void showDeleteActionButtonDialog() {
+        if (fabViewToActionDataMap.isEmpty()) {
+            Toast.makeText(this, "No action buttons to delete.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final CharSequence[] buttonLabels = fabViewToActionDataMap.values().stream()
+                .map(data -> data.keyText)
+                .toArray(CharSequence[]::new);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Select Button to Delete");
+        builder.setItems(buttonLabels, (dialog, whichButton) -> {
+            String selectedKeyText = buttonLabels[whichButton].toString();
+            // Find the ActionButtonData object and its corresponding View
+            View fabViewToRemove = null;
+            ActionButtonData dataToRemove = null;
+            for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
+                if (entry.getValue().keyText.equals(selectedKeyText)) {
+                    fabViewToRemove = entry.getKey();
+                    dataToRemove = entry.getValue();
+                    break;
+                }
+            }
+
+            if (fabViewToRemove != null && dataToRemove != null) {
+                rootContainer.removeView(fabViewToRemove);
+                fabViewToActionDataMap.remove(fabViewToRemove);
+                Toast.makeText(this, selectedKeyText + " Action Button deleted.", Toast.LENGTH_SHORT).show();
+                saveActionButtonsState(activeClientId); // Save state after deletion
+            }
+        });
+        builder.show();
+    }
+
     private void showFunctionKeyDialog() {
         final CharSequence[] fKeys = new CharSequence[12];
         for (int i = 0; i < 12; i++) {
@@ -650,7 +774,9 @@ public class MainActivity extends AppCompatActivity {
         builder.setTitle("Select Function Key");
         builder.setItems(fKeys, (dialog, item) -> {
             String key = fKeys[item].toString();
-            createCustomFab(key, keyCodeMap.get(key));
+            // Default position (0,0) and black color
+            ActionButtonData newButtonData = new ActionButtonData(key, keyCodeMap.get(key), 0f, 0f, Color.BLACK);
+            createCustomFab(newButtonData);
         });
         builder.show();
     }
@@ -666,7 +792,9 @@ public class MainActivity extends AppCompatActivity {
             if (key.length() == 1) {
                 int keyCode = KeyEvent.keyCodeFromString("KEYCODE_" + key);
                 if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
-                    createCustomFab(key, keyCode);
+                    // Default position (0,0) and black color
+                    ActionButtonData newButtonData = new ActionButtonData(key, keyCode, 0f, 0f, Color.BLACK);
+                    createCustomFab(newButtonData);
                 } else {
                     Toast.makeText(this, "Invalid key", Toast.LENGTH_SHORT).show();
                 }
@@ -678,36 +806,39 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
-    private void createCustomFab(String keyText, int keyCode) {
+    private FrameLayout createCustomFab(ActionButtonData buttonData) {
         WebView targetWebView = webViews.get(activeClientId);
         if (targetWebView == null) {
             Toast.makeText(this, "No active client to attach the button to.", Toast.LENGTH_SHORT).show();
-            return;
+            return null; // Return null if no active client
         }
 
         // Create a FrameLayout to hold the FAB and the TextView
         FrameLayout fabContainer = new FrameLayout(this);
         int fabSizePx = dpToPx(40); // Adjusted size for action buttons
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSizePx, fabSizePx);
+        // Set initial position from buttonData
+        containerParams.leftMargin = (int) buttonData.x;
+        containerParams.topMargin = (int) buttonData.y;
         fabContainer.setLayoutParams(containerParams);
         fabContainer.setAlpha(0.5f); // Set transparency
-        // Programmatically create circular background
+
+        // Programmatically create circular background with specified color
         android.graphics.drawable.GradientDrawable circularBackground = new android.graphics.drawable.GradientDrawable();
         circularBackground.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        circularBackground.setColor(Color.BLACK);
+        circularBackground.setColor(buttonData.color); // Use color from buttonData
         fabContainer.setBackground(circularBackground); // Set circular background directly on container
         fabContainer.setElevation(0f); // Remove shadow
 
         // Create the TextView for the label
         TextView label = new TextView(this);
-        // CRITICAL CHANGE: Use WRAP_CONTENT for TextView to ensure it's drawn on top of the background
         FrameLayout.LayoutParams labelParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
         labelParams.gravity = Gravity.CENTER; // Center the text within the button
         label.setLayoutParams(labelParams);
-        label.setText(keyText);
+        label.setText(buttonData.keyText); // Use keyText from buttonData
         label.setTextColor(Color.WHITE);
         label.setTextSize(12); // Reduced text size for better fit
         label.setClickable(false); // Ensure TextView does not consume clicks
@@ -717,16 +848,17 @@ public class MainActivity extends AppCompatActivity {
         fabContainer.addView(label);
 
         // Set the click listener on the container
-        fabContainer.setOnClickListener(v -> dispatchKeyEvent(targetWebView, keyCode));
+        fabContainer.setOnClickListener(v -> dispatchKeyEvent(targetWebView, buttonData.keyCode)); // Use keyCode from buttonData
 
         // Add the container to the root view and the map
         rootContainer.addView(fabContainer);
-        customFabMap.put(fabContainer, targetWebView);
+        fabViewToActionDataMap.put(fabContainer, buttonData); // Use new map
 
         // Make the entire container draggable
         makeFabDraggable(fabContainer);
 
-        Toast.makeText(this, "Action Button for '" + keyText + "' created.", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Action Button for '" + buttonData.keyText + "' created.", Toast.LENGTH_SHORT).show();
+        return fabContainer;
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -770,11 +902,41 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void deleteAllCustomFabs() {
-        for (View fab : customFabMap.keySet()) {
+        for (View fab : fabViewToActionDataMap.keySet()) {
             rootContainer.removeView(fab);
         }
-        customFabMap.clear();
+        fabViewToActionDataMap.clear();
+        // Also clear data from TinyDB for the active client
+        if (activeClientId != -1) {
+            TinyDB tinyDB = new TinyDB(this, "client_prefs_" + activeClientId);
+            tinyDB.remove(ACTION_BUTTONS_DATA_KEY);
+        }
         Toast.makeText(this, "All custom Action Buttons deleted.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void saveActionButtonsState(int clientId) {
+        List<ActionButtonData> dataToSave = new ArrayList<>(fabViewToActionDataMap.values());
+        String json = gson.toJson(dataToSave);
+        TinyDB tinyDB = new TinyDB(this, "client_prefs_" + clientId);
+        tinyDB.putString(ACTION_BUTTONS_DATA_KEY, json);
+    }
+
+    private void loadActionButtonsState(int clientId) {
+        // Clear existing buttons for the current client before loading new ones
+        deleteAllCustomFabs();
+
+        TinyDB tinyDB = new TinyDB(this, "client_prefs_" + clientId);
+        String json = tinyDB.getString(ACTION_BUTTONS_DATA_KEY);
+
+        if (json != null && !json.isEmpty()) {
+            Type type = new TypeToken<List<ActionButtonData>>() {}.getType();
+            List<ActionButtonData> loadedData = gson.fromJson(json, type);
+            if (loadedData != null) {
+                for (ActionButtonData data : loadedData) {
+                    createCustomFab(data); // Recreate the FAB using the loaded data
+                }
+            }
+        }
     }
 
     private void dispatchKeyEvent(WebView webView, int keyCode) {
@@ -826,6 +988,13 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "Press Back again to Exit", Toast.LENGTH_SHORT).show();
         exit = true;
         new Handler().postDelayed(() -> exit = false, 3000);
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        if (activeClientId != -1) {
+            saveActionButtonsState(activeClientId);
+        }
     }
 
     @Override protected void onDestroy() {
