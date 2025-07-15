@@ -220,6 +220,12 @@ public class MainActivity extends AppCompatActivity {
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                view.loadUrl(url);
+                return true;
+            }
+
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
 
@@ -243,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
                         + "  r.onsuccess=()=>res(r.result);"
                         + "  r.onerror=()=>rej(r.error);"
                         + "});"
-                        + "const key=u=>{try{return new URL(u).origin+new URL(u).pathname}catch{return u.split('?')[0]}};"
+                        + "const key=u=>{try{return new URL(u).origin+new URL(u).pathname}catch{return u.split('?')[0]}};";
                         + "const get=u=>openDb().then(d=>d.transaction(STORE,'readonly').objectStore(STORE).get(key(u)));"
                         + "const put=(u,b)=>openDb().then(d=>d.transaction(STORE,'readwrite').objectStore(STORE).put(b,key(u)));"
                         + "const Native=XMLHttpRequest;"
@@ -281,6 +287,10 @@ public class MainActivity extends AppCompatActivity {
         s.setDomStorageEnabled(true);
         s.setAppCacheEnabled(true);
         s.setAppCachePath(getCacheDir().getAbsolutePath());
+        s.setAllowFileAccess(true);
+        s.setDatabaseEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setUseWideViewPort(true);
