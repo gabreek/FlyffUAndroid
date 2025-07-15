@@ -86,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
     private Gson gson = new Gson();
 
     private String userAgent = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.5304.105 Mobile Safari/537.36";
-    private String url = "";
+    private String url = "https://universe.flyff.com/play";
     private boolean exit = false;
 
     // Class to hold action button data for serialization
@@ -240,44 +240,44 @@ public class MainActivity extends AppCompatActivity {
 
                 /* .bin caching via IndexedDB */
                 view.evaluateJavascript(
-                        "(function(){"
-                        + "const BIN=/\\.bin$/i,IDB_NAME='flyff_bin_cache',STORE='blobs',VER=1;"
-                        + "let db;"
-                        + "const openDb=()=>new Promise((res,rej)=>{"
-                        + "  const r=indexedDB.open(IDB_NAME,VER);"
-                        + "  r.onupgradeneeded=()=>r.result.createObjectStore(STORE);"
-                        + "  r.onsuccess=()=>res(r.result);"
-                        + "  r.onerror=()=>rej(r.error);"
-                        + "});"
-                        + "const key=u=>{try{return new URL(u).origin+new URL(u).pathname}catch{return u.split('?')[0]}};";
-                        + "const get=u=>openDb().then(d=>d.transaction(STORE,'readonly').objectStore(STORE).get(key(u)));"
-                        + "const put=(u,b)=>openDb().then(d=>d.transaction(STORE,'readwrite').objectStore(STORE).put(b,key(u)));"
-                        + "const Native=XMLHttpRequest;"
-                        + "window.XMLHttpRequest=function(){"
-                        + "  const xhr=new Native,open=xhr.open,send=xhr.send;"
-                        + "  xhr.open=function(m,u,...a){"
-                        + "    this._url=u;this._bin=BIN.test(u);"
-                        + "    return open.call(this,m,u,...a);"
-                        + "  };"
-                        + "  xhr.send=function(...a){"
-                        + "    if(!this._bin)return send.apply(this,a);"
-                        + "    const u=this._url;"
-                        + "    get(u).then(blob=>{"
-                        + "      if(blob){"
-                        + "        ['response','responseText','readyState','status','statusText'].forEach(p=>Object.defineProperty(xhr,p,{writable:true}));"
-                        + "        xhr.response=blob;xhr.responseText='';xhr.readyState=4;xhr.status=200;xhr.statusText='OK';"
-                        + "        if(xhr.onreadystatechange)xhr.onreadystatechange();"
-                        + "        if(xhr.onload)xhr.onload();"
-                        + "        return;"
-                        + "      }"
-                        + "      xhr.addEventListener('load',()=>{"
-                        + "        if(xhr.status===200&&xhr.response instanceof Blob)put(u,xhr.response);"
-                        + "      });"
-                        + "      send.apply(xhr,a);"
-                        + "    });"
-                        + "  };"
-                        + "  return xhr;"
-                        + "};"
+                        "(function(){\n"
+                        + "const BIN=/\\.bin$/i,IDB_NAME=\'flyff_bin_cache\',STORE=\'blobs\',VER=1;\n"
+                        + "let db;\n"
+                        + "const openDb=()=>new Promise((res,rej)=>{\n"
+                        + "  const r=indexedDB.open(IDB_NAME,VER);\n"
+                        + "  r.onupgradeneeded=()=>r.result.createObjectStore(STORE);\n"
+                        + "  r.onsuccess=()=>res(r.result);\n"
+                        + "  r.onerror=()=>rej(r.error);\n"
+                        + "});\n"
+                        + "const key=u=>{try{return new URL(u).origin+new URL(u).pathname}catch{return u.split(\'\')[0]}};\n"
+                        + "const get=u=>openDb().then(d=>d.transaction(STORE,\'readonly\').objectStore(STORE).get(key(u)));\n"
+                        + "const put=(u,b)=>openDb().then(d=>d.transaction(STORE,\'readwrite\').objectStore(STORE).put(b,key(u)));\n"
+                        + "const Native=XMLHttpRequest;\n"
+                        + "window.XMLHttpRequest=function(){\n"
+                        + "  const xhr=new Native,open=xhr.open,send=xhr.send;\n"
+                        + "  xhr.open=function(m,u,...a){\n"
+                        + "    this._url=u;this._bin=BIN.test(u);\n"
+                        + "    return open.call(this,m,u,...a);\n"
+                        + "  };\n"
+                        + "  xhr.send=function(...a){\n"
+                        + "    if(!this._bin)return send.apply(this,a);\n"
+                        + "    const u=this._url;\n"
+                        + "    get(u).then(blob=>{\n"
+                        + "      if(blob){\n"
+                        + "        [\'response\',\'responseText\',\'readyState\',\'status\',\'statusText\'].forEach(p=>Object.defineProperty(xhr,p,{writable:true}));\n"
+                        + "        xhr.response=blob;xhr.responseText=\'\';xhr.readyState=4;xhr.status=200;xhr.statusText=\'OK\';\n"
+                        + "        if(xhr.onreadystatechange)xhr.onreadystatechange();\n"
+                        + "        if(xhr.onload)xhr.onload();\n"
+                        + "        return;\n"
+                        + "      }\n"
+                        + "      xhr.addEventListener(\'load\',()=>{\n"
+                        + "        if(xhr.status===200&&xhr.response instanceof Blob)put(u,xhr.response);\n"
+                        + "      });\n"
+                        + "      send.apply(xhr,a);\n"
+                        + "    });\n"
+                        + "  };\n"
+                        + "  return xhr;\n"
+                        + "};\n"
                         + "})()", null);
             }
         });
@@ -407,7 +407,7 @@ public class MainActivity extends AppCompatActivity {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.hideSoftInputFromWindow(w.getWindowToken(), 0);
         }
-        
+
     }
 
     private void switchToNextClient() {
@@ -993,8 +993,8 @@ public class MainActivity extends AppCompatActivity {
             rootContainer.removeView(fab);
         }
         fabViewToActionDataMap.clear();
-        
-        
+
+
     }
 
     private void saveActionButtonsState(int clientId) {
