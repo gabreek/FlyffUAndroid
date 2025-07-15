@@ -27,16 +27,6 @@ public class CustomWebView extends WebView {
     protected void init() {
         setFocusable(true);
         setFocusableInTouchMode(true);
-        getSettings().setJavaScriptEnabled(true);
-        getSettings().setDomStorageEnabled(true);
-        getSettings().setAppCacheEnabled(true);
-        setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                view.loadUrl(url);
-                return true;
-            }
-        });
     }
 
     @Override

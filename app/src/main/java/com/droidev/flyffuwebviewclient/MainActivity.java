@@ -74,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
     private final SparseArray<WebView> webViews = new SparseArray<>();
     private final SparseArray<FrameLayout> layouts = new SparseArray<>();
     private int activeClientId = -1;
+    private TinyDB appTinyDB;
     private final Set<Integer> configuredClientIds = new HashSet<>();
 
     private LinearLayout linearLayout;
@@ -166,6 +167,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        appTinyDB = new TinyDB(this, "app_prefs");
         setContentView(R.layout.activity_main);
         setTitle("FlyffU Android");
 
@@ -189,7 +191,12 @@ public class MainActivity extends AppCompatActivity {
         initializeKeyCodeMap();
         setupFabTouchListener();
 
-        configuredClientIds.addAll(getExistingClientIdsFromFileSystem());
+        List<Integer> storedClientIds = appTinyDB.getListInt("configuredClientIds");
+        if (storedClientIds != null && !storedClientIds.isEmpty()) {
+            configuredClientIds.addAll(storedClientIds);
+        } else {
+            configuredClientIds.addAll(getExistingClientIdsFromFileSystem());
+        }
 
         // Load all action buttons for all configured clients at startup
         for (int clientId : configuredClientIds) {
@@ -400,6 +407,7 @@ public class MainActivity extends AppCompatActivity {
             layouts.get(k).setVisibility(k == id ? View.VISIBLE : View.GONE);
         }
         activeClientId = id;
+        loadClientState(activeClientId);
         setTitle(getClientDisplayName(id));
         WebView w = webViews.get(id);
         if (w != null) {
@@ -444,6 +452,7 @@ public class MainActivity extends AppCompatActivity {
     private void deleteClient(int id) {
         if (webViews.get(id) != null) killClient(id);
         configuredClientIds.remove(id);
+        appTinyDB.putListInt("configuredClientIds", new ArrayList<>(configuredClientIds));
         TinyDB db = new TinyDB(this, "client_prefs_" + id);
         db.clear();
         File f = new File(getApplicationInfo().dataDir, "shared_prefs/client_prefs_" + id + ".xml");
