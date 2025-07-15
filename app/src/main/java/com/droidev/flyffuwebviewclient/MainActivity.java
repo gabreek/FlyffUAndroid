@@ -1324,7 +1324,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private final Map<String, Runnable> timedRepeatMacroRunnables = new HashMap<>();
+    private final Map<String, Handler> timedRepeatMacroHandlers = new HashMap<>();
 
     private void dispatchKeyEvent(WebView webView, ActionButtonData buttonData) {
         switch (buttonData.macroType) {
@@ -1387,22 +1387,23 @@ public class MainActivity extends AppCompatActivity {
         buttonData.isToggleOn = !buttonData.isToggleOn;
         if (buttonData.isToggleOn) {
             // Start repeating
+            Handler handler = new Handler();
             Runnable runnable = new Runnable() {
                 @Override
                 public void run() {
                     dispatchSingleKeyEvent(webView, buttonData.repeatKey);
-                    timedRepeatMacroRunnables.get(buttonData.keyText).postDelayed(this, (long) (buttonData.repeatInterval * 1000));
+                    handler.postDelayed(this, (long) (buttonData.repeatInterval * 1000));
                 }
             };
-            timedRepeatMacroRunnables.put(buttonData.keyText, runnable);
+            timedRepeatMacroHandlers.put(buttonData.keyText, handler);
             // Initial dispatch
             dispatchSingleKeyEvent(webView, buttonData.repeatKey);
-            timedRepeatMacroRunnables.get(buttonData.keyText).postDelayed(runnable, (long) (buttonData.repeatInterval * 1000));
+            handler.postDelayed(runnable, (long) (buttonData.repeatInterval * 1000));
         } else {
             // Stop repeating
-            if (timedRepeatMacroRunnables.containsKey(buttonData.keyText)) {
-                timedRepeatMacroRunnables.get(buttonData.keyText).removeCallbacksAndMessages(null);
-                timedRepeatMacroRunnables.remove(buttonData.keyText);
+            if (timedRepeatMacroHandlers.containsKey(buttonData.keyText)) {
+                timedRepeatMacroHandlers.get(buttonData.keyText).removeCallbacksAndMessages(null);
+                timedRepeatMacroHandlers.remove(buttonData.keyText);
             }
         }
         // Update button appearance to reflect toggle state (e.g., change color)
