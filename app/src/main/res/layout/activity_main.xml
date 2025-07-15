@@ -55,7 +55,7 @@
             android:layout_marginTop="5dp"
             android:layout_marginRight="5dp"
             android:backgroundTint="@color/white"
-            android:src="@drawable/ic_hide_show" <!-- You'll need to create this drawable -->
+            android:src="@drawable/ic_hide_show"
             android:visibility="gone"
             app:fabSize="mini"
             tools:ignore="ContentDescription" />
