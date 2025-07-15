@@ -1387,6 +1387,17 @@ public class MainActivity extends AppCompatActivity {
 
     private void toggleTimedRepeatMacro(WebView webView, ActionButtonData buttonData) {
         buttonData.isToggleOn = !buttonData.isToggleOn;
+
+        // Update the ActionButtonData object in clientActionButtonsData
+        List<ActionButtonData> clientButtons = clientActionButtonsData.get(buttonData.clientId);
+        if (clientButtons != null) {
+            for (int i = 0; i < clientButtons.size(); i++) {
+                if (clientButtons.get(i).keyText.equals(buttonData.keyText) && clientButtons.get(i).clientId == buttonData.clientId) {
+                    clientButtons.set(i, buttonData);
+                    break;
+                }
+            }
+        }
         saveActionButtonsState(buttonData.clientId);
         if (buttonData.isToggleOn) {
             // Start repeating
@@ -1412,7 +1423,7 @@ public class MainActivity extends AppCompatActivity {
         // Update button appearance to reflect toggle state
         View fabView = null;
         for (Map.Entry<View, ActionButtonData> entry : fabViewToActionDataMap.entrySet()) {
-            if (entry.getValue().equals(buttonData)) {
+            if (entry.getValue().keyText.equals(buttonData.keyText) && entry.getValue().clientId == buttonData.clientId) {
                 fabView = entry.getKey();
                 break;
             }
