@@ -702,6 +702,7 @@ public class MainActivity extends AppCompatActivity {
                 showColorSelectionDialog(activeClientId);
             } else if (selectedOption.equals("Delete")) {
                 showDeleteActionButtonDialog(activeClientId);
+            }
         });
         builder.show();
     }
