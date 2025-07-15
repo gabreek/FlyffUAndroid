@@ -687,16 +687,18 @@ public class MainActivity extends AppCompatActivity {
 
         // Create a FrameLayout to hold the FAB and the TextView
         FrameLayout fabContainer = new FrameLayout(this);
-        int fabSizePx = dpToPx(32); // Smaller size for action buttons
+        int fabSizePx = dpToPx(36); // Smaller size for action buttons
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSizePx, fabSizePx);
         fabContainer.setLayoutParams(containerParams);
         fabContainer.setAlpha(0.5f); // Set transparency
 
         // Create the round FloatingActionButton
         FloatingActionButton newFab = new FloatingActionButton(this);
-        newFab.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams newFabParams = new FrameLayout.LayoutParams(dpToPx(36), dpToPx(36));
+        newFabParams.gravity = Gravity.CENTER; // Center newFab within fabContainer
+        newFab.setLayoutParams(newFabParams);
         newFab.setBackgroundTintList(ColorStateList.valueOf(Color.BLACK)); // Set background to black
-        newFab.setUseCompatPadding(true); // Re-enable padding
+        newFab.setUseCompatPadding(false); // Disable padding for better control
         newFab.setImageDrawable(null); // No icon
         newFab.setClickable(false); // Ensure inner FAB does not consume clicks
         newFab.setFocusable(false); // Ensure inner FAB does not consume focus
@@ -708,7 +710,7 @@ public class MainActivity extends AppCompatActivity {
         label.setText(keyText);
         label.setTextColor(Color.WHITE);
         label.setGravity(Gravity.CENTER);
-        label.setTextSize(16); // Slightly increased text size for better visibility
+        label.setTextSize(10); // Reduced text size for better fit
         label.setClickable(false); // Ensure TextView does not consume clicks
         label.setFocusable(false); // Ensure TextView does not consume focus
 
