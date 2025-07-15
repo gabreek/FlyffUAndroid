@@ -198,7 +198,10 @@ public class MainActivity extends AppCompatActivity {
         screenHeight = dm.heightPixels;
 
         initializeKeyCodeMap();
-        setupFabTouchListener();
+        setupFabTouchListener(floatingActionButton);
+        setupFabTouchListener(fabHideShow);
+
+        fabHideShow.setAlpha(0.5f);
 
         List<Integer> storedClientIds = appTinyDB.getListInt("configuredClientIds");
         if (storedClientIds != null && !storedClientIds.isEmpty()) {
@@ -325,7 +328,7 @@ public class MainActivity extends AppCompatActivity {
     /* ---------- rest of the file unchanged ---------- */
 
     @SuppressLint("ClickableViewAccessibility")
-    private void setupFabTouchListener() {
+    private void setupFabTouchListener(View fab) {
         longPressRunnable = () -> floatingActionButton.performLongClick();
         floatingActionButton.setOnTouchListener((v, e) -> {
             int X = (int) e.getRawX(), Y = (int) e.getRawY();
