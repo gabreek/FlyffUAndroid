@@ -199,7 +199,7 @@ public class MainActivity extends AppCompatActivity {
 
         initializeKeyCodeMap();
         setupFabTouchListener(floatingActionButton);
-        setupFabTouchListener(fabHideShow);
+        setupHideShowFabTouchListener(fabHideShow);
 
         fabHideShow.setAlpha(0.5f);
 
@@ -1022,28 +1022,74 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    private void setupHideShowFabTouchListener(View view) {
+        final float[] xDelta = new float[1];
+        final float[] yDelta = new float[1];
+        final float[] initialRawX = new float[1];
+        final float[] initialRawY = new float[1];
+        final long[] downTime = new long[1];
+
+        view.setOnTouchListener((v, event) -> {
+            int X = (int) event.getRawX();
+            int Y = (int) event.getRawY();
+            switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                case MotionEvent.ACTION_DOWN:
+                    downTime[0] = event.getDownTime();
+                    initialRawX[0] = event.getRawX();
+                    initialRawY[0] = event.getRawY();
+                    xDelta[0] = X - v.getX();
+                    yDelta[0] = Y - v.getY();
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    long eventDuration = event.getEventTime() - downTime[0];
+                    float dx = Math.abs(event.getRawX() - initialRawX[0]);
+                    float dy = Math.abs(event.getRawY() - initialRawY[0]);
+                    int slop = ViewConfiguration.get(v.getContext()).getScaledTouchSlop();
+                    if (dx < slop && dy < slop && eventDuration < ViewConfiguration.getLongPressTimeout()) {
+                        v.performClick();
+                    } else {
+                        snapFabToEdge(v);
+                    }
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    v.setX(X - xDelta[0]);
+                    v.setY(Y - yDelta[0]);
+                    return true;
+            }
+            return false;
+        });
+    }
+
 
     private void refreshAllActionButtonsDisplay() {
         deleteAllCustomFabs(); // Clear all existing FABs
 
-        boolean hasActionButtons = false;
+        boolean hasAnyActionButtons = false;
         for (Map.Entry<Integer, List<ActionButtonData>> entry : clientActionButtonsData.entrySet()) {
-            int clientId = entry.getKey();
-            if (webViews.get(clientId) != null) { // Only display buttons for active clients
-                for (ActionButtonData data : entry.getValue()) {
-                    if (isActionButtonsVisible) {
-                        createCustomFab(data);
-                    }
-                    hasActionButtons = true;
-                }
+            if (!entry.getValue().isEmpty()) {
+                hasAnyActionButtons = true;
+                break; // Found at least one action button
             }
         }
 
-        if (hasActionButtons) {
+        if (hasAnyActionButtons) {
             fabHideShow.setVisibility(View.VISIBLE);
             fabHideShow.setImageResource(isActionButtonsVisible ? R.drawable.ic_hide_show : R.drawable.ic_show_hide);
         } else {
             fabHideShow.setVisibility(View.GONE);
+        }
+
+        // Now, display only the action buttons for active clients if isActionButtonsVisible is true
+        if (isActionButtonsVisible) {
+            for (Map.Entry<Integer, List<ActionButtonData>> entry : clientActionButtonsData.entrySet()) {
+                int clientId = entry.getKey();
+                if (webViews.get(clientId) != null) { // Only display buttons for active clients
+                    for (ActionButtonData data : entry.getValue()) {
+                        createCustomFab(data);
+                    }
+                }
+            }
         }
     }
 
