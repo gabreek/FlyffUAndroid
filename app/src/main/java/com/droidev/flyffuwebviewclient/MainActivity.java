@@ -429,6 +429,7 @@ public class MainActivity extends AppCompatActivity {
             switchToClient(activeClientId);
         }
         refreshAllActionButtonsDisplay();
+    }
 
     private void deleteClient(int id) {
         if (webViews.get(id) != null) killClient(id);
