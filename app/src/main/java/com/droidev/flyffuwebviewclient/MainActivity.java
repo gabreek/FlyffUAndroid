@@ -96,6 +96,7 @@ public class MainActivity extends AppCompatActivity {
         float x;
         float y;
         int color; // Store color as an int
+        int clientId; // Add clientId field
 
         public ActionButtonData(String keyText, int keyCode, float x, float y, int color, int clientId) {
             this.keyText = keyText;
@@ -809,7 +810,7 @@ public class MainActivity extends AppCompatActivity {
         builder.setItems(fKeys, (dialog, item) -> {
             String key = fKeys[item].toString();
             // Default position (0,0) and black color
-            ActionButtonData newButtonData = new ActionButtonData(key, keyCodeMap.get(key), 0f, 0f, Color.BLACK);
+            ActionButtonData newButtonData = new ActionButtonData(key, (int)keyCodeMap.get(key), 0f, 0f, Color.BLACK, activeClientId);
             createCustomFab(newButtonData);
         });
         builder.show();
