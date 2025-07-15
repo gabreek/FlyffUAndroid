@@ -687,7 +687,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Create a FrameLayout to hold the FAB and the TextView
         FrameLayout fabContainer = new FrameLayout(this);
-        int fabSizePx = dpToPx(48); // Smaller size for action buttons
+        int fabSizePx = dpToPx(32); // Smaller size for action buttons
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(fabSizePx, fabSizePx);
         fabContainer.setLayoutParams(containerParams);
         fabContainer.setAlpha(0.5f); // Set transparency
@@ -701,7 +701,6 @@ public class MainActivity extends AppCompatActivity {
         newFab.setClickable(false); // Ensure inner FAB does not consume clicks
         newFab.setFocusable(false); // Ensure inner FAB does not consume focus
         newFab.setElevation(0f); // Remove shadow
-        newFab.setMaxImageSize(dpToPx(32)); // Set max image size to allow text visibility
 
         // Create the TextView for the label
         TextView label = new TextView(this);
